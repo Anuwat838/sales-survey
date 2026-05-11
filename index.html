@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Weekly Sales Survey</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Sarabun','Prompt',sans-serif;background:#f1f5f9;min-height:100vh}
+  select,input,textarea,button{font-family:'Sarabun','Prompt',sans-serif}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .fade-in{animation:fadeIn .25s ease}
+  ::-webkit-scrollbar{width:6px;height:6px}
+  ::-webkit-scrollbar-track{background:#f1f5f9}
+  ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef } = React;
+
+// ============================================================
+// STORAGE (localStorage fallback — works on GitHub Pages)
+// ============================================================
+const storage = {
+  get(key) {
+    try { const v = localStorage.getItem(key); return v ? { value: v } : null; } catch { return null; }
+  },
+  set(key, value) {
+    try { localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value)); return true; } catch { return null; }
+  }
+};
+
+// ============================================================
+// MASTER DATA
+// ============================================================
+const MASTER_SITES = [{"region":"CENTRAL","as_code":"AS CT01","site":"LOTUS (RAYONG)","REF":{"sell":13490,"target":110000},"WM":{"sell":7990,"target":110000},"AC":{"sell":0,"target":126000},"pc_status":"RECRUITING"},{"region":"BANGKOK","as_code":"AS BKK05","site":"LOTUS DEPARTMENT STORE (PATTANAKARN BANGKOK)","REF":{"sell":13490,"target":89000},"WM":{"sell":7990,"target":45000},"AC":{"sell":0,"target":128000},"pc_status":"RECRUITING"},{"region":"BANGKOK","as_code":"AS BKK03","site":"LOTUS (WANG HIN)","REF":{"sell":21480,"target":46000},"WM":{"sell":0,"target":50000},"AC":{"sell":0,"target":128000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK06","site":"LOTUS (PINKLAO)","REF":{"sell":24970,"target":100000},"WM":{"sell":27480,"target":92000},"AC":{"sell":0,"target":268000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK07","site":"LOTUS (RAMA 2)","REF":{"sell":44450,"target":218000},"WM":{"sell":55450,"target":138000},"AC":{"sell":0,"target":267000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT10","site":"LOTUS (HUAHIN MARKET VILLAGE)","REF":{"sell":15980,"target":197000},"WM":{"sell":75440,"target":125000},"AC":{"sell":0,"target":539000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK08","site":"LOTUS (LAKSI)","REF":{"sell":19990,"target":100000},"WM":{"sell":37970,"target":64000},"AC":{"sell":0,"target":128000},"pc_status":"RECRUITING"},{"region":"BANGKOK","as_code":"AS BKK03","site":"LOTUS (EKKAMAI RAMINTRA)","REF":{"sell":21480,"target":65000},"WM":{"sell":22980,"target":60000},"AC":{"sell":0,"target":50000},"pc_status":"RECRUITING"},{"region":"CENTRAL","as_code":"AS CT07","site":"LOTUS (KRATHUM BAEN)","REF":{"sell":9990,"target":20000},"WM":{"sell":28480,"target":64000},"AC":{"sell":0,"target":128000},"pc_status":"RECRUITING"},{"region":"CENTRAL","as_code":"AS CT02","site":"LOTUS (CHANTHABURI)","REF":{"sell":47940,"target":107000},"WM":{"sell":55430,"target":115000},"AC":{"sell":27980,"target":194000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK10","site":"LOTUS (BANGPLEE)","REF":{"sell":40950,"target":115000},"WM":{"sell":55440,"target":92000},"AC":{"sell":27980,"target":52000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE01","site":"LOTUS (PRATHAI NAKHON RATCHASIMA)","REF":{"sell":31960,"target":60000},"WM":{"sell":20970,"target":50000},"AC":{"sell":0,"target":128000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK08","site":"LOTUS (CHAENGWATTANA)","REF":{"sell":93410,"target":148000},"WM":{"sell":28480,"target":92000},"AC":{"sell":0,"target":128000},"pc_status":"RECRUITING"},{"region":"CENTRAL","as_code":"AS CT12","site":"LOTUS (SARABURI)","REF":{"sell":143860,"target":269000},"WM":{"sell":116380,"target":239000},"AC":{"sell":140910,"target":362000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE02","site":"LOTUS SUPERCENTER (CHOK CHAI NAKHON RATCHASIMA)","REF":{"sell":23480,"target":65000},"WM":{"sell":44460,"target":60000},"AC":{"sell":0,"target":128000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK08","site":"LOTUS (RANGSIT)","REF":{"sell":90400,"target":190000},"WM":{"sell":79440,"target":119000},"AC":{"sell":54460,"target":70000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE02","site":"LOTUS (PAK CHONG)","REF":{"sell":53470,"target":140000},"WM":{"sell":80440,"target":101000},"AC":{"sell":69950,"target":394000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT08","site":"LOTUS DEPARTMENT STORE (BANG LEN NAKHON PATHOM)","REF":{"sell":15980,"target":30000},"WM":{"sell":27480,"target":46000},"AC":{"sell":0,"target":50000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE12","site":"LOTUS (PHIMAI NAKHON RATCHASIMA)","REF":{"sell":106400,"target":150000},"WM":{"sell":46960,"target":110000},"AC":{"sell":157890,"target":71000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST08","site":"LOTUS DEPARTMENT STORE (CHANA SONGKHLA)","REF":{"sell":89400,"target":180000},"WM":{"sell":128360,"target":165000},"AC":{"sell":146900,"target":85000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE02","site":"LOTUS (SIKHIO)","REF":{"sell":168340,"target":267000},"WM":{"sell":104390,"target":165000},"AC":{"sell":344780,"target":288000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT14","site":"LOTUS (KABINBURI)","REF":{"sell":33470,"target":50000},"WM":{"sell":29970,"target":50000},"AC":{"sell":0,"target":136000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT12","site":"LOTUS (ONGKARAK-NAKORNNAYOK)","REF":{"sell":35960,"target":41000},"WM":{"sell":15980,"target":40000},"AC":{"sell":0,"target":128000},"pc_status":"NEW"},{"region":"BANGKOK","as_code":"AS BKK04","site":"LOTUS (PRACHACHUEN)","REF":{"sell":76430,"target":105000},"WM":{"sell":49950,"target":92000},"AC":{"sell":41970,"target":50000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE03","site":"LOTUS SUPERCENTER (CHATURAT CHAIYAPHUM)","REF":{"sell":25970,"target":90000},"WM":{"sell":91420,"target":92000},"AC":{"sell":104930,"target":89000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE05","site":"LOTUS (NADI UDON THANI)","REF":{"sell":88920,"target":103000},"WM":{"sell":51940,"target":115000},"AC":{"sell":146900,"target":199000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK04","site":"LOTUS (RAMA 1)","REF":{"sell":168300,"target":210000},"WM":{"sell":35970,"target":101000},"AC":{"sell":55960,"target":75000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK02","site":"LOTUS DEPARTMENT STORE (NAKHON INN NONTHABURI)","REF":{"sell":37960,"target":72000},"WM":{"sell":38970,"target":45000},"AC":{"sell":0,"target":128000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK05","site":"LOTUS (RAMA 4)","REF":{"sell":125880,"target":130000},"WM":{"sell":25480,"target":100000},"AC":{"sell":118920,"target":232000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT05","site":"LOTUS (PHRAE)","REF":{"sell":73430,"target":122000},"WM":{"sell":63430,"target":85000},"AC":{"sell":13990,"target":116000},"pc_status":"LONG SICK LEAVE"},{"region":"CENTRAL","as_code":"AS CT01","site":"LOTUS (NIKHOM PHATTHANA RAYONG)","REF":{"sell":58440,"target":102000},"WM":{"sell":67420,"target":88000},"AC":{"sell":13990,"target":128000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE05","site":"LOTUS HYPERMARKET (LOEI)","REF":{"sell":51960,"target":50000},"WM":{"sell":21480,"target":60000},"AC":{"sell":34980,"target":107000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST07","site":"LOTUS (HAT YAI)","REF":{"sell":105890,"target":175000},"WM":{"sell":133370,"target":183000},"AC":{"sell":55960,"target":50000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE01","site":"LOTUS (NAKHON RATCHASIMA)","REF":{"sell":85430,"target":100000},"WM":{"sell":36470,"target":78000},"AC":{"sell":230850,"target":199000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST09","site":"LOTUS (YALA)","REF":{"sell":59930,"target":126000},"WM":{"sell":109370,"target":110000},"AC":{"sell":0,"target":71000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE06","site":"LOTUS (UDON THANI)","REF":{"sell":164350,"target":175000},"WM":{"sell":44450,"target":115000},"AC":{"sell":181870,"target":162000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT07","site":"LOTUS (SI THEP PHETCHABUN)","REF":{"sell":102400,"target":124000},"WM":{"sell":44940,"target":80000},"AC":{"sell":0,"target":128000},"pc_status":"NEW"},{"region":"CENTRAL","as_code":"AS CT14","site":"LOTUS (PRACHINBURI)","REF":{"sell":140850,"target":190000},"WM":{"sell":115370,"target":161000},"AC":{"sell":41970,"target":93000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT12","site":"LOTUS (KHENG KHOI SARABURI)","REF":{"sell":34970,"target":74000},"WM":{"sell":69430,"target":69000},"AC":{"sell":69950,"target":160000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE07","site":"LOTUS (ASAWANN SHOPPING COMPLEX NONGKHAI FL.1)","REF":{"sell":118380,"target":181000},"WM":{"sell":99900,"target":115000},"AC":{"sell":97930,"target":1009000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT11","site":"LOTUS (AYUTTHAYA)","REF":{"sell":318220,"target":400000},"WM":{"sell":207280,"target":311000},"AC":{"sell":175380,"target":242000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK03","site":"LOTUS (BANGKAPI)","REF":{"sell":47940,"target":100000},"WM":{"sell":68930,"target":55000},"AC":{"sell":27980,"target":117000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT04","site":"LOTUS (CHONBURI)","REF":{"sell":106880,"target":126000},"WM":{"sell":95400,"target":138000},"AC":{"sell":13990,"target":53000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE07","site":"LOTUS (NAKHON PHANOM)","REF":{"sell":86910,"target":70000},"WM":{"sell":22970,"target":73000},"AC":{"sell":13990,"target":77000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST05","site":"LOTUS (THA SALA)","REF":{"sell":132370,"target":209000},"WM":{"sell":129850,"target":130000},"AC":{"sell":41970,"target":50000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK03","site":"LOTUS (LADPRAO)","REF":{"sell":40450,"target":42000},"WM":{"sell":25480,"target":40000},"AC":{"sell":13990,"target":128000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT02","site":"LOTUS (TRAT)","REF":{"sell":93400,"target":100000},"WM":{"sell":57440,"target":85000},"AC":{"sell":55960,"target":50000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT06","site":"LOTUS (SOUTH PATTAYA)","REF":{"sell":255220,"target":272000},"WM":{"sell":134890,"target":206000},"AC":{"sell":41970,"target":112000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK07","site":"LOTUS (BANGPAKOK)","REF":{"sell":97890,"target":120000},"WM":{"sell":41460,"target":50000},"AC":{"sell":69950,"target":128000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST08","site":"LOTUS DEPARTMENT STORE (SADAO)","REF":{"sell":340660,"target":360000},"WM":{"sell":158830,"target":242000},"AC":{"sell":237840,"target":91000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE02","site":"LOTUS (PAK THONG CHAI NAKHON RATCHASIMA)","REF":{"sell":165330,"target":182000},"WM":{"sell":156860,"target":206000},"AC":{"sell":166390,"target":261000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE14","site":"LOTUS (PHIBUN MANGSAHAN)","REF":{"sell":263250,"target":249000},"WM":{"sell":95890,"target":183000},"AC":{"sell":177370,"target":193000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE10","site":"LOTUS DEPARTMENT STORE (SERMTHAI COMPLEX)","REF":{"sell":75420,"target":75000},"WM":{"sell":63440,"target":92000},"AC":{"sell":181880,"target":484000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE01","site":"LOTUS (NON THAI NAKHON RATCHASIMA)","REF":{"sell":63920,"target":90000},"WM":{"sell":79930,"target":80000},"AC":{"sell":55960,"target":50000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT13","site":"LOTUS (KHOK SAMRONG LOP BURI)","REF":{"sell":140860,"target":135000},"WM":{"sell":114870,"target":165000},"AC":{"sell":83940,"target":187000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK03","site":"LOTUS (FORTUNE)","REF":{"sell":0,"target":20000},"WM":{"sell":26480,"target":11000},"AC":{"sell":0,"target":50000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK04","site":"LOTUS (RAMA 3)","REF":{"sell":98890,"target":105000},"WM":{"sell":69940,"target":92000},"AC":{"sell":0,"target":194000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE11","site":"LOTUS (PHAYAKKHAPHUM PHISAI MAHASARAKHAM)","REF":{"sell":124350,"target":100000},"WM":{"sell":102880,"target":165000},"AC":{"sell":153890,"target":125000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST03","site":"LOTUS (KRABI)","REF":{"sell":286240,"target":280000},"WM":{"sell":129840,"target":202000},"AC":{"sell":69950,"target":88000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK09","site":"LOTUS (SUKHAPHIBAN 3)","REF":{"sell":114380,"target":201000},"WM":{"sell":140870,"target":92000},"AC":{"sell":104930,"target":98000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST05","site":"LOTUS (THUNGSONG)","REF":{"sell":224800,"target":303000},"WM":{"sell":218780,"target":202000},"AC":{"sell":209850,"target":133000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE04","site":"LOTUS (KHONKAEN)","REF":{"sell":162830,"target":174000},"WM":{"sell":163330,"target":197000},"AC":{"sell":328770,"target":409000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST02","site":"LOTUS (SURATTHANI)","REF":{"sell":145350,"target":152000},"WM":{"sell":120870,"target":150000},"AC":{"sell":157890,"target":85000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST08","site":"LOTUS EXTRA (SONGKHLA (CINEMA)","REF":{"sell":317200,"target":280000},"WM":{"sell":112880,"target":206000},"AC":{"sell":41970,"target":113000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT09","site":"LOTUS (RATCHABURI)","REF":{"sell":207300,"target":196000},"WM":{"sell":116370,"target":165000},"AC":{"sell":195870,"target":51000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST04","site":"LOTUS (PHUKET)","REF":{"sell":171820,"target":152000},"WM":{"sell":46960,"target":92000},"AC":{"sell":13990,"target":58000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK09","site":"LOTUS (NAVANAKORN)","REF":{"sell":264220,"target":300000},"WM":{"sell":202820,"target":219000},"AC":{"sell":41970,"target":113000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE12","site":"LOTUS SUPERCENTER (SANGKHA SURIN)","REF":{"sell":113890,"target":100000},"WM":{"sell":51930,"target":83000},"AC":{"sell":111920,"target":128000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT08","site":"LOTUS HYPERMARKET (NAKHON PATHOM)","REF":{"sell":84410,"target":119000},"WM":{"sell":99900,"target":83000},"AC":{"sell":27980,"target":103000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK03","site":"LOTUS (SUKHAPHIBAN 1)","REF":{"sell":135340,"target":180000},"WM":{"sell":142380,"target":124000},"AC":{"sell":55960,"target":405000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT03","site":"LOTUS DEPARTMENT STORE (BANGPAKONG CHACHOENGSAO)","REF":{"sell":243240,"target":239000},"WM":{"sell":127360,"target":161000},"AC":{"sell":55960,"target":281000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE04","site":"LOTUS (YASOTHON)","REF":{"sell":136850,"target":144000},"WM":{"sell":112900,"target":125000},"AC":{"sell":55960,"target":65000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST07","site":"LOTUS (HAT YAI 2)","REF":{"sell":147350,"target":169000},"WM":{"sell":140870,"target":138000},"AC":{"sell":54460,"target":50000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT04","site":"LOTUS (PHAYAO)","REF":{"sell":127900,"target":127000},"WM":{"sell":88410,"target":101000},"AC":{"sell":223840,"target":247000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT02","site":"LOTUS (FANG)","REF":{"sell":91910,"target":105000},"WM":{"sell":102890,"target":100000},"AC":{"sell":0,"target":162000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT08","site":"LOTUS (CHAI NAT)","REF":{"sell":174850,"target":230000},"WM":{"sell":166360,"target":128000},"AC":{"sell":94930,"target":146000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE12","site":"LOTUS (SATUEK BURI RAM)","REF":{"sell":165820,"target":171000},"WM":{"sell":157840,"target":166000},"AC":{"sell":210860,"target":181000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT06","site":"LOTUS (KHANU WORALAKSABURI)","REF":{"sell":80940,"target":90000},"WM":{"sell":85400,"target":83000},"AC":{"sell":34980,"target":50000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT02","site":"LOTUS DEPARTMENT STORE (KLAENG)","REF":{"sell":126350,"target":177000},"WM":{"sell":176810,"target":138000},"AC":{"sell":201360,"target":252000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE08","site":"LOTUS (THAT PHANOM)","REF":{"sell":217790,"target":175000},"WM":{"sell":127880,"target":183000},"AC":{"sell":258820,"target":256000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE12","site":"LOTUS (NANG RONG BURI RAM)","REF":{"sell":108880,"target":80000},"WM":{"sell":36470,"target":69000},"AC":{"sell":300320,"target":96000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE05","site":"LOTUS DEPARTMENT STORE (NONG BUA LAM PHU)","REF":{"sell":174820,"target":181000},"WM":{"sell":160840,"target":161000},"AC":{"sell":54460,"target":122000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK06","site":"LOTUS (BANGYAI)","REF":{"sell":227290,"target":169000},"WM":{"sell":101400,"target":165000},"AC":{"sell":89440,"target":53000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE13","site":"LOTUS (KANTHARALAK)","REF":{"sell":446020,"target":450000},"WM":{"sell":316180,"target":324000},"AC":{"sell":444680,"target":402000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT14","site":"LOTUS (ARANYAPRATHET)","REF":{"sell":80930,"target":80000},"WM":{"sell":61450,"target":64000},"AC":{"sell":27980,"target":50000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST06","site":"LOTUS (TRANG)","REF":{"sell":283750,"target":225000},"WM":{"sell":122380,"target":183000},"AC":{"sell":294790,"target":156000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE06","site":"LOTUS DEPARTMENT STORE (KUMPHAWAPI)","REF":{"sell":188820,"target":190000},"WM":{"sell":127880,"target":128000},"AC":{"sell":293310,"target":183000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT08","site":"LOTUS HYPERMARKET (KAMPHAENG SAEN)","REF":{"sell":273230,"target":244000},"WM":{"sell":136370,"target":165000},"AC":{"sell":41970,"target":128000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST02","site":"LOTUS (SAMUI)","REF":{"sell":193810,"target":196000},"WM":{"sell":186310,"target":180000},"AC":{"sell":83940,"target":176000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT06","site":"LOTUS (NORTH PATTAYA)","REF":{"sell":99400,"target":136000},"WM":{"sell":131870,"target":92000},"AC":{"sell":41970,"target":113000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT05","site":"LOTUS HYPERMARKET (LOTUS HYPERMARKET PHITSANULOK)","REF":{"sell":81920,"target":110000},"WM":{"sell":123360,"target":92000},"AC":{"sell":76950,"target":69000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE14","site":"LOTUS (TRAKAN PHUET PHON)","REF":{"sell":270220,"target":255000},"WM":{"sell":244740,"target":250000},"AC":{"sell":355250,"target":241000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT14","site":"LOTUS (SI MAHA PHOT)","REF":{"sell":158330,"target":167000},"WM":{"sell":114360,"target":100000},"AC":{"sell":83940,"target":128000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK02","site":"LOTUS (BANG KRUAI NONTHABURI)","REF":{"sell":65440,"target":100000},"WM":{"sell":140360,"target":101000},"AC":{"sell":83950,"target":85000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK05","site":"LOTUS (SEACON SQUARE 2)","REF":{"sell":111380,"target":120000},"WM":{"sell":88430,"target":73000},"AC":{"sell":76950,"target":128000},"pc_status":"LONG SICK LEAVE"},{"region":"CENTRAL","as_code":"AS CT01","site":"LOTUS (MAPTAPHUT - RAYONG)","REF":{"sell":67940,"target":50000},"WM":{"sell":59930,"target":73000},"AC":{"sell":26480,"target":128000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE14","site":"LOTUS (DET UDOM UBONRATCHATHANI)","REF":{"sell":181310,"target":166000},"WM":{"sell":158810,"target":161000},"AC":{"sell":118920,"target":136000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT09","site":"LOTUS (BAN PONG)","REF":{"sell":174320,"target":140000},"WM":{"sell":101400,"target":125000},"AC":{"sell":62960,"target":71000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK09","site":"LOTUS HYPERMARKET (NONG CHOK)","REF":{"sell":320720,"target":296000},"WM":{"sell":199320,"target":201000},"AC":{"sell":62960,"target":188000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE10","site":"LOTUS (CHUM PHAE)","REF":{"sell":249260,"target":189000},"WM":{"sell":147820,"target":190000},"AC":{"sell":160890,"target":288000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT04","site":"LOTUS DEPARTMENT STORE (BAN BUENG)","REF":{"sell":561900,"target":450000},"WM":{"sell":256710,"target":326000},"AC":{"sell":72950,"target":76000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE06","site":"LOTUS (SAWANG DAEN DIN)","REF":{"sell":235300,"target":200000},"WM":{"sell":159330,"target":174000},"AC":{"sell":188870,"target":361000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST03","site":"LOTUS (BAN TA KHUN - SURAT THANI)","REF":{"sell":197320,"target":198000},"WM":{"sell":133330,"target":115000},"AC":{"sell":97940,"target":83000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT05","site":"LOTUS (HARBOR MALL LAMCHABANG)","REF":{"sell":312660,"target":270000},"WM":{"sell":205280,"target":219000},"AC":{"sell":240330,"target":132000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT15","site":"LOTUS (SUPHANBURI)","REF":{"sell":132860,"target":137000},"WM":{"sell":110400,"target":92000},"AC":{"sell":23990,"target":109000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT12","site":"LOTUS DEPARTMENT STORE (NAKHON NAYOK)","REF":{"sell":250740,"target":250000},"WM":{"sell":233770,"target":206000},"AC":{"sell":459680,"target":448000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE07","site":"LOTUS VALUE (BUENG KAN)","REF":{"sell":116390,"target":70000},"WM":{"sell":36950,"target":73000},"AC":{"sell":27980,"target":105000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST06","site":"LOTUS (SATUN)","REF":{"sell":34960,"target":116000},"WM":{"sell":143840,"target":50000},"AC":{"sell":27980,"target":123000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST02","site":"LOTUS (LAMAI SAMUI)","REF":{"sell":309210,"target":322000},"WM":{"sell":273680,"target":219000},"AC":{"sell":55960,"target":345000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE08","site":"LOTUS (MUKDAHAN)","REF":{"sell":197320,"target":138000},"WM":{"sell":124860,"target":161000},"AC":{"sell":167880,"target":71000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT10","site":"LOTUS (PRAN BURI)","REF":{"sell":215800,"target":201000},"WM":{"sell":165340,"target":150000},"AC":{"sell":210870,"target":128000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK05","site":"LOTUS (SUKHUMVIT 50)","REF":{"sell":209750,"target":213000},"WM":{"sell":81440,"target":55000},"AC":{"sell":48970,"target":67000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE01","site":"LOTUS DEPARTMENT STORE (BUA YAI)","REF":{"sell":242750,"target":215000},"WM":{"sell":115880,"target":115000},"AC":{"sell":166380,"target":229000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE02","site":"LOTUS (KORAT 2)","REF":{"sell":127870,"target":150000},"WM":{"sell":175330,"target":128000},"AC":{"sell":164400,"target":174000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT10","site":"LOTUS (CHA AM)","REF":{"sell":127870,"target":149000},"WM":{"sell":116880,"target":73000},"AC":{"sell":83940,"target":51000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT11","site":"LOTUS (BANG PA-IN)","REF":{"sell":118360,"target":90000},"WM":{"sell":83410,"target":92000},"AC":{"sell":94930,"target":128000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST05","site":"LOTUS SUPERCENTER (SICHON NAKORN SI THAMMARAT)","REF":{"sell":376120,"target":390000},"WM":{"sell":290650,"target":211000},"AC":{"sell":202860,"target":123000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT08","site":"LOTUS SUPERCENTER (TAKHLI NAKHON SAWAN)","REF":{"sell":195290,"target":196000},"WM":{"sell":133860,"target":100000},"AC":{"sell":34980,"target":128000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT14","site":"LOTUS (WANG NAM YEN SA KAEO)","REF":{"sell":225790,"target":173000},"WM":{"sell":89890,"target":110000},"AC":{"sell":244830,"target":71000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT07","site":"LOTUS DEPARTMENT STORE (SAMUT SAKHON)","REF":{"sell":246260,"target":232000},"WM":{"sell":155870,"target":128000},"AC":{"sell":62960,"target":186000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK08","site":"LOTUS DEPARTMENT STORE (KHLONG LUANG)","REF":{"sell":182800,"target":126000},"WM":{"sell":70440,"target":100000},"AC":{"sell":55960,"target":128000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE03","site":"LOTUS (PHOL - KHONKHEN)","REF":{"sell":161340,"target":135000},"WM":{"sell":113880,"target":110000},"AC":{"sell":146900,"target":176000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT01","site":"LOTUS (CHIANGMAI KAMTIANG)","REF":{"sell":195290,"target":132000},"WM":{"sell":130890,"target":156000},"AC":{"sell":117420,"target":229000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT08","site":"LOTUS (SAM PRAN)","REF":{"sell":254740,"target":250000},"WM":{"sell":211280,"target":161000},"AC":{"sell":153890,"target":85000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT15","site":"LOTUS (U-THONG SUPHANBURI)","REF":{"sell":221360,"target":137000},"WM":{"sell":38970,"target":92000},"AC":{"sell":13990,"target":50000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE12","site":"LOTUS (PRAKHON CHAI BURI RAM)","REF":{"sell":202780,"target":170000},"WM":{"sell":138380,"target":130000},"AC":{"sell":376240,"target":321000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK06","site":"LOTUS (BANGKAE)","REF":{"sell":158340,"target":132000},"WM":{"sell":107410,"target":100000},"AC":{"sell":0,"target":50000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE02","site":"LOTUS (JOR HOR NAKHON RATCHASIMA)","REF":{"sell":65430,"target":97000},"WM":{"sell":120890,"target":64000},"AC":{"sell":83940,"target":103000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK09","site":"LOTUS (PATHUM THANI)","REF":{"sell":233780,"target":199000},"WM":{"sell":130390,"target":115000},"AC":{"sell":62960,"target":143000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK01","site":"LOTUS (BANGPOO)","REF":{"sell":291710,"target":269000},"WM":{"sell":208810,"target":161000},"AC":{"sell":41970,"target":144000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE12","site":"LOTUS (LAM PLAI MAT BURI RAM)","REF":{"sell":91400,"target":64000},"WM":{"sell":52950,"target":60000},"AC":{"sell":139900,"target":77000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK08","site":"LOTUS (BAN FAH LAM LUK KA)","REF":{"sell":136380,"target":110000},"WM":{"sell":120890,"target":110000},"AC":{"sell":62960,"target":128000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE11","site":"LOTUS SUPERCENTER (THA TUM SURIN)","REF":{"sell":284200,"target":160000},"WM":{"sell":64430,"target":138000},"AC":{"sell":377750,"target":136000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT05","site":"LOTUS (BOWIN)","REF":{"sell":351140,"target":280000},"WM":{"sell":219750,"target":206000},"AC":{"sell":83950,"target":286000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST05","site":"LOTUS SUPERCENTER (CHANDEE NAKHON SI THAMMARAT)","REF":{"sell":215290,"target":176000},"WM":{"sell":104390,"target":96000},"AC":{"sell":181380,"target":136000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK08","site":"LOTUS (LAM LUK KA KHLONG 2)","REF":{"sell":329690,"target":247000},"WM":{"sell":205820,"target":202000},"AC":{"sell":76950,"target":69000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE09","site":"LOTUS (KALASIN)","REF":{"sell":224780,"target":143000},"WM":{"sell":142850,"target":160000},"AC":{"sell":257330,"target":158000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT03","site":"LOTUS (MAE SAI)","REF":{"sell":175300,"target":114000},"WM":{"sell":130880,"target":138000},"AC":{"sell":213850,"target":298000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST03","site":"LOTUS (THALANG)","REF":{"sell":246250,"target":217000},"WM":{"sell":187810,"target":139000},"AC":{"sell":139900,"target":243000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE09","site":"LOTUS SUPERCENTER (CHIANG YUEN MAHASARAKHAM)","REF":{"sell":175830,"target":162000},"WM":{"sell":184810,"target":133000},"AC":{"sell":125920,"target":302000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT11","site":"LOTUS (SENA)","REF":{"sell":263250,"target":243000},"WM":{"sell":175340,"target":115000},"AC":{"sell":104930,"target":152000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT03","site":"LOTUS (PHANOM SARAKHAM)","REF":{"sell":336200,"target":279000},"WM":{"sell":242740,"target":193000},"AC":{"sell":83940,"target":229000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT13","site":"LOTUS (LAM NARAI)","REF":{"sell":188790,"target":157000},"WM":{"sell":139370,"target":110000},"AC":{"sell":160890,"target":128000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT06","site":"LOTUS EXTRA (MAE SOT TAK)","REF":{"sell":83410,"target":70000},"WM":{"sell":92410,"target":73000},"AC":{"sell":27980,"target":164000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT10","site":"LOTUS (PRACHUAP KHIRI KHAN)","REF":{"sell":112370,"target":141000},"WM":{"sell":175820,"target":92000},"AC":{"sell":48970,"target":52000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE07","site":"LOTUS (LOTUS THA BO)","REF":{"sell":306210,"target":258000},"WM":{"sell":194800,"target":147000},"AC":{"sell":311790,"target":381000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT15","site":"LOTUS (KANCHANABURI)","REF":{"sell":255250,"target":187000},"WM":{"sell":162350,"target":147000},"AC":{"sell":167880,"target":294000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE13","site":"LOTUS (KHUKHAN)","REF":{"sell":310170,"target":265000},"WM":{"sell":231770,"target":165000},"AC":{"sell":174880,"target":178000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT10","site":"LOTUS (THA YANG)","REF":{"sell":157320,"target":113000},"WM":{"sell":161830,"target":138000},"AC":{"sell":125910,"target":53000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT07","site":"LOTUS (THA LUANG PHICHIT)","REF":{"sell":263250,"target":178000},"WM":{"sell":154340,"target":147000},"AC":{"sell":209860,"target":174000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE04","site":"LOTUS (KHONKAEN 2 EXTRA PLUS MALL)","REF":{"sell":135370,"target":105000},"WM":{"sell":115380,"target":90000},"AC":{"sell":41970,"target":245000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT03","site":"LOTUS (MAE CHAN CHIENGRAI)","REF":{"sell":204800,"target":176000},"WM":{"sell":140840,"target":92000},"AC":{"sell":138400,"target":258000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT13","site":"LOTUS (ANG THONG)","REF":{"sell":229270,"target":160000},"WM":{"sell":109870,"target":101000},"AC":{"sell":41970,"target":154000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST01","site":"LOTUS (RANONG)","REF":{"sell":255750,"target":173000},"WM":{"sell":119370,"target":115000},"AC":{"sell":328280,"target":261000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK10","site":"LOTUS (BANG BO)","REF":{"sell":213250,"target":165000},"WM":{"sell":132860,"target":100000},"AC":{"sell":27980,"target":128000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT03","site":"LOTUS (PHANAT NIKHOM CHONBURI)","REF":{"sell":487510,"target":300000},"WM":{"sell":178290,"target":206000},"AC":{"sell":174880,"target":134000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE02","site":"LOTUS (DAN KHUN THOT - NAKHON RATCHASIMA)","REF":{"sell":263760,"target":150000},"WM":{"sell":90410,"target":119000},"AC":{"sell":213850,"target":103000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK08","site":"LOTUS (LOTUS RANGSIT NAKHONNAYOK)","REF":{"sell":90900,"target":80000},"WM":{"sell":98920,"target":64000},"AC":{"sell":55470,"target":79000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE09","site":"LOTUS (PHON THONG ROI ET)","REF":{"sell":97900,"target":89000},"WM":{"sell":98890,"target":60000},"AC":{"sell":97940,"target":128000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT08","site":"LOTUS (SALAYA)","REF":{"sell":163310,"target":110000},"WM":{"sell":68460,"target":64000},"AC":{"sell":43470,"target":50000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE03","site":"LOTUS SUPERCENTER (KAENG KHRO CHAIYAPHUM)","REF":{"sell":191320,"target":167000},"WM":{"sell":252190,"target":165000},"AC":{"sell":294310,"target":495000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT03","site":"LOTUS DEPARTMENT STORE (CHIANG KHONG CHIANGRAI)","REF":{"sell":54950,"target":50000},"WM":{"sell":74930,"target":46000},"AC":{"sell":40470,"target":227000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT15","site":"LOTUS (SAMCHUK)","REF":{"sell":216290,"target":122000},"WM":{"sell":67440,"target":87000},"AC":{"sell":125920,"target":126000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST02","site":"LOTUS DEPARTMENT STORE (WIANG SA SURATTHANI)","REF":{"sell":99900,"target":60000},"WM":{"sell":56440,"target":55000},"AC":{"sell":27980,"target":128000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE13","site":"LOTUS HYPERMARKET (UTHUMPHON PHISAI)","REF":{"sell":275700,"target":230000},"WM":{"sell":224770,"target":138000},"AC":{"sell":373250,"target":501000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT07","site":"LOTUS DEPARTMENT STORE (LOM SAK)","REF":{"sell":203790,"target":160000},"WM":{"sell":216760,"target":147000},"AC":{"sell":132910,"target":393000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT08","site":"LOTUS (NONG CHANG UTHAI THANI)","REF":{"sell":463570,"target":380000},"WM":{"sell":358610,"target":220000},"AC":{"sell":362250,"target":308000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK08","site":"LOTUS (RANGSIT KHLONG 7)","REF":{"sell":295740,"target":217000},"WM":{"sell":178340,"target":128000},"AC":{"sell":160900,"target":146000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT05","site":"LOTUS (UTTARADIT)","REF":{"sell":156370,"target":109000},"WM":{"sell":132860,"target":101000},"AC":{"sell":118920,"target":162000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK06","site":"LOTUS (CHARANSANITWONG)","REF":{"sell":194310,"target":125000},"WM":{"sell":142880,"target":119000},"AC":{"sell":69960,"target":106000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE09","site":"LOTUS (SOMDET KALASIN)","REF":{"sell":283210,"target":200000},"WM":{"sell":229230,"target":165000},"AC":{"sell":343770,"target":709000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE05","site":"LOTUS (BAN PHUE UDON THANI)","REF":{"sell":422590,"target":255000},"WM":{"sell":257720,"target":228000},"AC":{"sell":680520,"target":414000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE03","site":"LOTUS (CHAIYAPHUM)","REF":{"sell":172830,"target":145000},"WM":{"sell":220260,"target":133000},"AC":{"sell":111920,"target":147000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK01","site":"LOTUS (CITY PARK BANGPLEE)","REF":{"sell":193790,"target":149000},"WM":{"sell":201800,"target":128000},"AC":{"sell":34980,"target":85000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT04","site":"LOTUS (AMMATA CHONBURI)","REF":{"sell":371180,"target":204000},"WM":{"sell":215310,"target":206000},"AC":{"sell":140910,"target":50000},"pc_status":"RECRUITING"},{"region":"NORTHEAST","as_code":"AS NE14","site":"LOTUS (UBONRATCHATHANI)","REF":{"sell":249240,"target":158000},"WM":{"sell":161340,"target":128000},"AC":{"sell":283310,"target":537000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT07","site":"LOTUS SUPERCENTER (BUENG SAM PHAN PHETCHABUN)","REF":{"sell":292220,"target":224000},"WM":{"sell":228240,"target":133000},"AC":{"sell":274820,"target":278000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT04","site":"LOTUS (NAN)","REF":{"sell":234270,"target":100000},"WM":{"sell":104910,"target":128000},"AC":{"sell":87940,"target":237000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT05","site":"LOTUS EXTRA (THA THONG PHITSANULOK)","REF":{"sell":295750,"target":207000},"WM":{"sell":135860,"target":83000},"AC":{"sell":123920,"target":169000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK10","site":"LOTUS (BANGNA)","REF":{"sell":278730,"target":165000},"WM":{"sell":154370,"target":121000},"AC":{"sell":66950,"target":50000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE03","site":"LOTUS DEPARTMENT STORE (NONG RUEA KHONKAEN)","REF":{"sell":167840,"target":152000},"WM":{"sell":238250,"target":115000},"AC":{"sell":125920,"target":103000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST01","site":"LOTUS (LANG SUAN CHUMPHON)","REF":{"sell":396130,"target":250000},"WM":{"sell":263230,"target":183000},"AC":{"sell":92440,"target":65000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST01","site":"LOTUS (CHUMPHON)","REF":{"sell":128860,"target":84000},"WM":{"sell":69420,"target":46000},"AC":{"sell":13990,"target":105000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK02","site":"LOTUS (RATTANATHIBETH)","REF":{"sell":104910,"target":100000},"WM":{"sell":154370,"target":69000},"AC":{"sell":0,"target":77000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST02","site":"LOTUS (CHAIYA)","REF":{"sell":108930,"target":65000},"WM":{"sell":59930,"target":45000},"AC":{"sell":34980,"target":50000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST06","site":"LOTUS HYPERMARKET (PHATTHALUNG)","REF":{"sell":388610,"target":239000},"WM":{"sell":318150,"target":219000},"AC":{"sell":124420,"target":84000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK09","site":"LOTUS (MINBURI)","REF":{"sell":259250,"target":130000},"WM":{"sell":114400,"target":110000},"AC":{"sell":13990,"target":87000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST06","site":"LOTUS DEPARTMENT STORE (MAEKHRI PHATTHALUNG)","REF":{"sell":459090,"target":297000},"WM":{"sell":265250,"target":165000},"AC":{"sell":238840,"target":87000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE13","site":"LOTUS DEPARTMENT STORE (WARIN CHAMRAP)","REF":{"sell":198800,"target":90000},"WM":{"sell":101390,"target":101000},"AC":{"sell":132910,"target":120000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT07","site":"LOTUS (SAMUT SONGKHRAM)","REF":{"sell":186320,"target":100000},"WM":{"sell":87420,"target":73000},"AC":{"sell":121650,"target":176000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE11","site":"LOTUS (BORABUE - MAHA SARAKHAM)","REF":{"sell":443580,"target":288000},"WM":{"sell":343130,"target":206000},"AC":{"sell":357260,"target":460000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT11","site":"LOTUS DEPARTMENT STORE (ROJANA)","REF":{"sell":102880,"target":28000},"WM":{"sell":41460,"target":60000},"AC":{"sell":122920,"target":50000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE13","site":"LOTUS (SISAKET)","REF":{"sell":173340,"target":108000},"WM":{"sell":168330,"target":100000},"AC":{"sell":139910,"target":181000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT01","site":"LOTUS HYPERMARKET (RUAMCHOKE CHIANGMAI)","REF":{"sell":169340,"target":82000},"WM":{"sell":130870,"target":100000},"AC":{"sell":160890,"target":272000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT06","site":"LOTUS (TAK)","REF":{"sell":286780,"target":150000},"WM":{"sell":196300,"target":140000},"AC":{"sell":259840,"target":175000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE11","site":"LOTUS (WAPI PATHUM MAHASARAKHAM)","REF":{"sell":230760,"target":170000},"WM":{"sell":244250,"target":115000},"AC":{"sell":157890,"target":336000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT13","site":"LOTUS (THAWUNG LOPBURI)","REF":{"sell":150860,"target":87000},"WM":{"sell":88410,"target":55000},"AC":{"sell":0,"target":105000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT07","site":"LOTUS (PHETCHABUN)","REF":{"sell":326190,"target":151000},"WM":{"sell":151840,"target":128000},"AC":{"sell":47470,"target":131000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT01","site":"LOTUS (BANCHANG)","REF":{"sell":39950,"target":18000},"WM":{"sell":14990,"target":14000},"AC":{"sell":55960,"target":128000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT04","site":"LOTUS (CHIANG KHAM)","REF":{"sell":254760,"target":106000},"WM":{"sell":83920,"target":78000},"AC":{"sell":160890,"target":123000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE12","site":"LOTUS SUPERCENTER (PRASAT SURIN)","REF":{"sell":304210,"target":139000},"WM":{"sell":139830,"target":92000},"AC":{"sell":418210,"target":254000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST05","site":"LOTUS (NAKHON SI THAMMARAT)","REF":{"sell":193350,"target":100000},"WM":{"sell":151820,"target":73000},"AC":{"sell":41970,"target":50000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK09","site":"LOTUS (LEAP KLONG 2)","REF":{"sell":49940,"target":30000},"WM":{"sell":46960,"target":18000},"AC":{"sell":27980,"target":50000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT08","site":"LOTUS DEPARTMENT STORE (THE WALK NAKHON SAWAN)","REF":{"sell":183320,"target":67000},"WM":{"sell":106890,"target":55000},"AC":{"sell":91950,"target":53000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE09","site":"LOTUS (KUCHINARAI KALASIN)","REF":{"sell":276720,"target":153000},"WM":{"sell":183300,"target":32000},"AC":{"sell":254320,"target":106000},"pc_status":"WORKING"},{"region":"NORTH","as_code":"AS NT01","site":"LOTUS (HANGDONG)","REF":{"sell":144340,"target":53000},"WM":{"sell":99390,"target":40000},"AC":{"sell":55960,"target":51000},"pc_status":"WORKING"},{"region":"BANGKOK","as_code":"AS BKK05","site":"LOTUS (SRINAKARIN)","REF":{"sell":1297260,"target":281000},"WM":{"sell":367660,"target":206000},"AC":{"sell":122930,"target":139000},"pc_status":"WORKING"},{"region":"NORTHEAST","as_code":"AS NE11","site":"LOTUS (ROI ET)","REF":{"sell":465530,"target":147000},"WM":{"sell":265220,"target":64000},"AC":{"sell":167890,"target":261000},"pc_status":"WORKING"},{"region":"CENTRAL","as_code":"AS CT08","site":"LOTUS (NAKHONCHAISI)","REF":{"sell":159350,"target":30000},"WM":{"sell":73930,"target":35000},"AC":{"sell":132910,"target":128000},"pc_status":"WORKING"},{"region":"SOUTH","as_code":"AS ST04","site":"LOTUS DEPARTMENT STORE (CHALONG PHUKET)","REF":{"sell":101380,"target":30000},"WM":{"sell":84920,"target":14000},"AC":{"sell":48970,"target":50000},"pc_status":"WORKING"}];
+
+const REGIONS = [...new Set(MASTER_SITES.map(s=>s.region))].sort();
+const REGION_AS_MAP = {};
+const AS_SITES_MAP = {};
+MASTER_SITES.forEach(s=>{
+  if(!REGION_AS_MAP[s.region]) REGION_AS_MAP[s.region]=new Set();
+  REGION_AS_MAP[s.region].add(s.as_code);
+  if(!AS_SITES_MAP[s.as_code]) AS_SITES_MAP[s.as_code]=[];
+  AS_SITES_MAP[s.as_code].push(s);
+});
+
+function getWeekLabel(d){
+  const dt=new Date(d);
+  dt.setDate(dt.getDate()-((dt.getDay()+6)%7));
+  const sun=new Date(dt);sun.setDate(dt.getDate()+6);
+  const f=x=>`${x.getDate()}/${x.getMonth()+1}/${x.getFullYear()}`;
+  return `${f(dt)} - ${f(sun)}`;
+}
+const THIS_WEEK=getWeekLabel(new Date());
+const TODAY=new Date().toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'numeric'});
+
+const fmtB=n=>'฿'+Number(n).toLocaleString('th-TH');
+const achPct=(s,t)=>t?Math.round((s/t)*100):0;
+
+const CATS=['REF','WM','AC'];
+const CAT_COLORS={REF:'#3b82f6',WM:'#8b5cf6',AC:'#f59e0b'};
+const CAT_LABELS={REF:'ตู้เย็น',WM:'เครื่องซักผ้า',AC:'แอร์'};
+const SITUATIONS=['ลูกค้าหนาแน่น','สินค้าขาด Stock','โปรโมชั่นดึงดูด','คู่แข่งจัดโปรฯ','อากาศส่งผล','พนักงานไม่พอ','สินค้าใหม่ขายดี','Display พัง','อื่นๆ'];
+const ISSUES=['สินค้าขาด','พนักงานไม่พอ','ระบบขัดข้อง','ลูกค้าร้องเรียน','โปรมีปัญหา','หน้าร้านสกปรก'];
+
+// shared styles
+const card={background:'#fff',borderRadius:16,padding:24,boxShadow:'0 2px 12px rgba(0,0,0,.07)'};
+const lbl={display:'block',fontWeight:600,fontSize:12,color:'#374151',marginBottom:6,letterSpacing:'.03em'};
+const inp={width:'100%',padding:'11px 14px',borderRadius:10,border:'2px solid #e5e7eb',fontSize:15,color:'#111',background:'#fff',outline:'none',boxSizing:'border-box'};
+const sel={...inp,cursor:'pointer',appearance:'none'};
+const btn=(bg,dis=false)=>({width:'100%',padding:14,borderRadius:12,border:'none',background:bg,color:bg==='#e5e7eb'?'#9ca3af':'#fff',fontSize:15,fontWeight:700,cursor:dis?'not-allowed':'pointer',transition:'all .2s'});
+
+// ============================================================
+// SURVEY
+// ============================================================
+function SurveyPage({feedbacks,onSubmit,sheetsUrl}){
+  const [region,setRegion]=useState('');
+  const [asCode,setAsCode]=useState('');
+  const [site,setSite]=useState('');
+  const [step,setStep]=useState('select');
+  const [busy,setBusy]=useState(false);
+  const [form,setForm]=useState({empId:'',catComments:{REF:'',WM:'',AC:''},catSituations:{REF:'',WM:'',AC:''},issues:[],overallComment:''});
+
+  const asCodes=region?[...REGION_AS_MAP[region]].sort():[];
+  const sites=asCode?AS_SITES_MAP[asCode]||[]:[];
+  const siteData=MASTER_SITES.find(s=>s.site===site);
+  const done=feedbacks.some(f=>f.site===site&&f.week===THIS_WEEK);
+
+  const toggleIssue=i=>setForm(p=>({...p,issues:p.issues.includes(i)?p.issues.filter(x=>x!==i):[...p.issues,i]}));
+
+  const reset=()=>{setStep('select');setRegion('');setAsCode('');setSite('');setForm({empId:'',catComments:{REF:'',WM:'',AC:''},catSituations:{REF:'',WM:'',AC:''},issues:[],overallComment:''});};
+
+  const submit=async()=>{
+    if(!form.empId)return;
+    setBusy(true);
+    const payload={week:THIS_WEEK,region,as_code:asCode,site,submittedAt:new Date().toISOString(),submitterName:form.empId,catSituations:form.catSituations,issues:form.issues,overallComment:form.overallComment,catComments:form.catComments,sales:{REF:siteData?.REF,WM:siteData?.WM,AC:siteData?.AC}};
+    await onSubmit(payload);
+    setBusy(false);setStep('done');
+  };
+
+  if(step==='done') return(
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'60vh',gap:20,textAlign:'center'}}>
+      <div style={{width:80,height:80,borderRadius:'50%',background:'linear-gradient(135deg,#22c55e,#16a34a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:36,color:'#fff',boxShadow:'0 8px 32px rgba(34,197,94,.35)'}}>✓</div>
+      <div>
+        <h2 style={{margin:'0 0 8px',fontSize:22}}>ส่ง Feedback สำเร็จ!</h2>
+        <p style={{margin:0,color:'#6b7280',fontSize:14}}>{site} · {THIS_WEEK}</p>
+        {sheetsUrl&&<p style={{margin:'8px 0 0',fontSize:13,color:'#3b82f6'}}>✓ บันทึก Google Sheets แล้ว</p>}
+      </div>
+      <button onClick={reset} style={btn('#1e293b')}>ส่ง Feedback สาขาอื่น</button>
+    </div>
+  );
+
+  return(
+    <div style={{maxWidth:700,margin:'0 auto'}}>
+      <div style={card}>
+        <label style={lbl}>1. เลือก Region</label>
+        <select value={region} onChange={e=>{setRegion(e.target.value);setAsCode('');setSite('');}} style={sel}>
+          <option value=''>-- เลือก Region --</option>
+          {REGIONS.map(r=><option key={r}>{r}</option>)}
+        </select>
+        {region&&<>
+          <label style={{...lbl,marginTop:14}}>2. เลือก AS Code</label>
+          <select value={asCode} onChange={e=>{setAsCode(e.target.value);setSite('');}} style={sel}>
+            <option value=''>-- เลือก AS Code --</option>
+            {asCodes.map(a=><option key={a}>{a}</option>)}
+          </select>
+        </>}
+        {asCode&&<>
+          <label style={{...lbl,marginTop:14}}>3. เลือกสาขา</label>
+          <select value={site} onChange={e=>{setSite(e.target.value);setStep(e.target.value?'form':'select');}} style={sel}>
+            <option value=''>-- เลือกสาขา ({sites.length} สาขา) --</option>
+            {sites.map(s=><option key={s.site}>{s.site}</option>)}
+          </select>
+        </>}
+        {site&&<p style={{margin:'10px 0 0',fontSize:12,color:'#6b7280'}}>สัปดาห์: {THIS_WEEK}</p>}
+      </div>
+
+      {site&&siteData&&(
+        <div style={{...card,background:'linear-gradient(135deg,#0f172a,#1e3a5f)',color:'#fff',marginTop:16}}>
+          <div style={{fontSize:11,opacity:.6,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase',marginBottom:16}}>
+            ยอดขายรวม · อัพเดต {TODAY} — {site}
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:14}}>
+            {CATS.map(cat=>{
+              const d=siteData[cat];const ap=achPct(d.sell,d.target);
+              return(<div key={cat} style={{background:'rgba(255,255,255,.08)',borderRadius:10,padding:'12px 14px',borderTop:`3px solid ${CAT_COLORS[cat]}`}}>
+                <div style={{fontSize:11,opacity:.7,fontWeight:700,marginBottom:6,color:CAT_COLORS[cat]}}>{cat} — {CAT_LABELS[cat]}</div>
+                <div style={{fontSize:18,fontWeight:800}}>{fmtB(d.sell)}</div>
+                <div style={{fontSize:11,opacity:.5,marginTop:4}}>เป้า {fmtB(d.target)}</div>
+                <div style={{height:4,borderRadius:2,background:'rgba(255,255,255,.15)',marginTop:8,overflow:'hidden'}}>
+                  <div style={{height:'100%',width:`${Math.min(ap,100)}%`,background:ap>=100?'#4ade80':ap>=80?'#fbbf24':'#f87171',borderRadius:2}}/>
+                </div>
+                <div style={{fontSize:11,opacity:.6,marginTop:4}}>{ap}% ของเป้า</div>
+              </div>);
+            })}
+          </div>
+          {done&&<div style={{marginTop:16,padding:'10px 14px',borderRadius:8,background:'rgba(74,222,128,.15)',border:'1px solid rgba(74,222,128,.3)',color:'#4ade80',fontSize:13,fontWeight:600}}>✓ ส่ง Feedback สัปดาห์นี้แล้ว</div>}
+        </div>
+      )}
+
+      {site&&step==='form'&&!done&&(
+        <div style={{...card,marginTop:16}}>
+          <h3 style={{margin:'0 0 20px',fontSize:17,fontWeight:700}}>กรอก Feedback</h3>
+          <div style={{marginBottom:16}}>
+            <label style={lbl}>รหัสพนักงาน *</label>
+            <input value={form.empId} onChange={e=>setForm(p=>({...p,empId:e.target.value}))} placeholder='รหัสพนักงาน' style={inp}/>
+          </div>
+
+          <div style={{marginBottom:16}}>
+            <label style={lbl}>ข้อมูลแยกตาม Category</label>
+            {CATS.map(cat=>(
+              <div key={cat} style={{marginBottom:16,padding:'14px 16px',borderRadius:12,border:`1.5px solid ${CAT_COLORS[cat]}33`,background:CAT_COLORS[cat]+'08'}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+                  <span style={{padding:'3px 10px',borderRadius:12,background:CAT_COLORS[cat],color:'#fff',fontSize:12,fontWeight:700}}>{cat}</span>
+                  <span style={{fontSize:13,color:'#374151',fontWeight:600}}>{CAT_LABELS[cat]}</span>
+                </div>
+                <div style={{marginBottom:8}}>
+                  <label style={{...lbl,fontSize:11}}>สถานการณ์หน้าร้าน {cat}</label>
+                  <select value={form.catSituations[cat]} onChange={e=>setForm(p=>({...p,catSituations:{...p.catSituations,[cat]:e.target.value}}))} style={{...sel,fontSize:13}}>
+                    <option value=''>-- เลือกสถานการณ์ --</option>
+                    {SITUATIONS.map(s=><option key={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{...lbl,fontSize:11}}>ความเห็น / วิเคราะห์ยอดขาย</label>
+                  <textarea value={form.catComments[cat]} onChange={e=>setForm(p=>({...p,catComments:{...p.catComments,[cat]:e.target.value}}))}
+                    placeholder={`วิเคราะห์ยอดขาย ${cat}...`} rows={2}
+                    style={{...inp,resize:'vertical',fontSize:13,lineHeight:1.6}}/>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{marginBottom:16}}>
+            <label style={lbl}>ปัญหาที่พบ (เลือกได้หลายข้อ)</label>
+            <div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:4}}>
+              {ISSUES.map(i=>(
+                <button key={i} onClick={()=>toggleIssue(i)}
+                  style={{padding:'7px 13px',borderRadius:20,border:`2px solid ${form.issues.includes(i)?'#1e293b':'#e5e7eb'}`,background:form.issues.includes(i)?'#1e293b':'#fff',color:form.issues.includes(i)?'#fff':'#6b7280',fontSize:12,cursor:'pointer',fontWeight:500,transition:'all .15s'}}>{i}</button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{marginBottom:20}}>
+            <label style={lbl}>ความเห็นภาพรวม</label>
+            <textarea value={form.overallComment} onChange={e=>setForm(p=>({...p,overallComment:e.target.value}))}
+              placeholder='สรุปภาพรวมสัปดาห์นี้...' rows={3} style={{...inp,resize:'vertical',lineHeight:1.6}}/>
+          </div>
+
+          <button onClick={submit} disabled={busy||!form.empId} style={btn(!form.empId?'#e5e7eb':'#1e293b',!form.empId)}>
+            {busy?'กำลังส่ง...':'ส่ง Feedback'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+function DashboardPage({feedbacks}){
+  const [rf,setRf]=useState('ALL');
+  const [cv,setCv]=useState('REF');
+  const [sb,setSb]=useState('ach');
+
+  const sites=rf==='ALL'?MASTER_SITES:MASTER_SITES.filter(s=>s.region===rf);
+  const fbMap={};
+  feedbacks.filter(f=>f.week===THIS_WEEK).forEach(f=>{fbMap[f.site]=f;});
+  const rows=sites.map(s=>({...s,fb:fbMap[s.site]||null,submitted:!!fbMap[s.site]}));
+  const sorted=[...rows].sort((a,b)=>sb==='ach'?achPct(b[cv].sell,b[cv].target)-achPct(a[cv].sell,a[cv].target):b[cv].sell-a[cv].sell);
+  const ts=sites.reduce((s,x)=>s+x[cv].sell,0);
+  const tt=sites.reduce((s,x)=>s+x[cv].target,0);
+  const sub=rows.filter(r=>r.submitted).length;
+
+  return(<div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:20}}>
+      {[{l:'ยอดรวม '+cv,v:fmtB(ts),s:`${achPct(ts,tt)}% ของเป้า`,c:CAT_COLORS[cv]},
+        {l:'เป้ารวม '+cv,v:fmtB(tt),s:`${sites.length} สาขา`,c:'#6b7280'},
+        {l:'ส่ง Feedback',v:`${sub}/${rows.length}`,s:`${Math.round(sub/rows.length*100)}%`,c:sub===rows.length?'#16a34a':'#f59e0b'},
+        {l:'ยังไม่ส่ง',v:rows.length-sub,s:'สาขา',c:rows.length-sub>0?'#ef4444':'#16a34a'}
+      ].map(x=>(
+        <div key={x.l} style={{...card,borderTop:`4px solid ${x.c}`,padding:'18px 20px'}}>
+          <div style={{fontSize:11,color:'#6b7280',fontWeight:700,letterSpacing:'.05em',textTransform:'uppercase',marginBottom:6}}>{x.l}</div>
+          <div style={{fontSize:22,fontWeight:800,color:x.c}}>{x.v}</div>
+          <div style={{fontSize:12,color:'#9ca3af',marginTop:3}}>{x.s}</div>
+        </div>
+      ))}
+    </div>
+
+    <div style={{display:'flex',gap:10,marginBottom:14,flexWrap:'wrap',alignItems:'center'}}>
+      <select value={rf} onChange={e=>setRf(e.target.value)} style={{...sel,width:'auto',padding:'9px 14px'}}>
+        <option value='ALL'>ทุก Region</option>
+        {REGIONS.map(r=><option key={r}>{r}</option>)}
+      </select>
+      <div style={{display:'flex',gap:6}}>
+        {CATS.map(c=>(
+          <button key={c} onClick={()=>setCv(c)}
+            style={{padding:'9px 16px',borderRadius:10,border:`2px solid ${cv===c?CAT_COLORS[c]:'#e5e7eb'}`,background:cv===c?CAT_COLORS[c]+'15':'#fff',color:cv===c?CAT_COLORS[c]:'#6b7280',fontSize:13,fontWeight:700,cursor:'pointer'}}>
+            {c}
+          </button>
+        ))}
+      </div>
+      <div style={{display:'flex',gap:6,marginLeft:'auto'}}>
+        {[['ach','% เป้า'],['sell','ยอดขาย']].map(([v,l])=>(
+          <button key={v} onClick={()=>setSb(v)}
+            style={{padding:'9px 14px',borderRadius:10,border:`2px solid ${sb===v?'#1e293b':'#e5e7eb'}`,background:sb===v?'#1e293b':'#fff',color:sb===v?'#fff':'#6b7280',fontSize:13,fontWeight:600,cursor:'pointer'}}>
+            {l}
+          </button>
+        ))}
+      </div>
+    </div>
+
+    <div style={{...card,padding:0,overflow:'hidden'}}>
+      <div style={{display:'grid',gridTemplateColumns:'2fr 1.2fr .8fr .8fr 1fr 70px',padding:'10px 18px',background:'#f8fafc',borderBottom:'1px solid #e5e7eb',fontSize:11,fontWeight:700,color:'#6b7280',letterSpacing:'.05em',textTransform:'uppercase'}}>
+        <div>สาขา / AS</div><div>ยอดขาย {cv}</div><div>% เป้า</div><div>เป้า</div><div>Feedback</div><div style={{textAlign:'center'}}>สถานะ</div>
+      </div>
+      {sorted.map((row,i)=>{
+        const ap=achPct(row[cv].sell,row[cv].target);
+        return(<div key={row.site+i} style={{display:'grid',gridTemplateColumns:'2fr 1.2fr .8fr .8fr 1fr 70px',padding:'13px 18px',borderBottom:i<sorted.length-1?'1px solid #f1f5f9':'none',alignItems:'center'}}
+          onMouseEnter={e=>e.currentTarget.style.background='#f8fafc'}
+          onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+          <div>
+            <div style={{fontWeight:600,fontSize:13,color:'#111'}}>{row.site}</div>
+            <div style={{fontSize:11,color:'#9ca3af',marginTop:2}}>{row.as_code} · {row.region}</div>
+          </div>
+          <div style={{fontWeight:700,fontSize:14}}>{fmtB(row[cv].sell)}</div>
+          <div>
+            <div style={{fontSize:13,fontWeight:700,color:ap>=100?'#16a34a':ap>=80?'#f59e0b':'#ef4444'}}>{ap}%</div>
+            <div style={{height:3,borderRadius:2,background:'#e5e7eb',marginTop:4,overflow:'hidden'}}>
+              <div style={{height:'100%',width:`${Math.min(ap,100)}%`,background:ap>=100?'#16a34a':ap>=80?'#f59e0b':'#ef4444'}}/>
+            </div>
+          </div>
+          <div style={{fontSize:12,color:'#6b7280'}}>{fmtB(row[cv].target)}</div>
+          <div style={{fontSize:12,color:'#6b7280'}}>{row.fb?<><div style={{fontWeight:600,color:'#111',fontSize:12}}>{row.fb.submitterName}</div></>:'-'}</div>
+          <div style={{textAlign:'center'}}>
+            <span style={{display:'inline-flex',alignItems:'center',gap:3,padding:'3px 8px',borderRadius:20,fontSize:11,fontWeight:700,background:row.submitted?'#dcfce7':'#fef3c7',color:row.submitted?'#16a34a':'#d97706'}}>
+              {row.submitted?'✓ ส่ง':'รอ'}
+            </span>
+          </div>
+        </div>);
+      })}
+    </div>
+  </div>);
+}
+
+// ============================================================
+// HISTORY
+// ============================================================
+function HistoryPage({feedbacks}){
+  const [rf,setRf]=useState('ALL');
+  const [af,setAf]=useState('ALL');
+  const allAS=[...new Set(MASTER_SITES.map(s=>s.as_code))].sort();
+  const filtered=feedbacks.filter(f=>(rf==='ALL'||f.region===rf)&&(af==='ALL'||f.as_code===af))
+    .sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt));
+
+  return(<div>
+    <div style={{display:'flex',gap:10,marginBottom:18,flexWrap:'wrap'}}>
+      <select value={rf} onChange={e=>setRf(e.target.value)} style={{...sel,width:'auto',padding:'9px 14px'}}>
+        <option value='ALL'>ทุก Region</option>{REGIONS.map(r=><option key={r}>{r}</option>)}
+      </select>
+      <select value={af} onChange={e=>setAf(e.target.value)} style={{...sel,width:'auto',padding:'9px 14px'}}>
+        <option value='ALL'>ทุก AS Code</option>{allAS.map(a=><option key={a}>{a}</option>)}
+      </select>
+      <div style={{marginLeft:'auto',padding:'9px 14px',borderRadius:10,background:'#f1f5f9',fontSize:13,color:'#6b7280',fontWeight:600}}>{filtered.length} รายการ</div>
+    </div>
+    {filtered.length===0
+      ?<div style={{textAlign:'center',padding:'60px 0',color:'#9ca3af'}}>ยังไม่มี Feedback</div>
+      :filtered.map((fb,i)=>(
+        <div key={i} style={{...card,marginBottom:14}}>
+          <div style={{display:'flex',justifyContent:'space-between',flexWrap:'wrap',gap:8,marginBottom:12}}>
+            <div>
+              <span style={{fontWeight:700,fontSize:15,color:'#111'}}>{fb.site}</span>
+              <span style={{marginLeft:8,fontSize:12,color:'#6b7280'}}>{fb.as_code} · {fb.region}</span>
+              <span style={{marginLeft:8,fontSize:12,color:'#9ca3af'}}>{fb.week}</span>
+            </div>
+            <span style={{fontSize:12,color:'#9ca3af'}}>{fb.submitterName}</span>
+          </div>
+          {fb.sales&&(
+            <div style={{display:'flex',gap:14,marginBottom:12,padding:'10px 14px',background:'#f8fafc',borderRadius:10,flexWrap:'wrap'}}>
+              {CATS.map(c=>{const d=fb.sales[c];if(!d)return null;const ap=achPct(d.sell,d.target);return(
+                <div key={c} style={{fontSize:12}}>
+                  <span style={{padding:'2px 6px',borderRadius:8,background:CAT_COLORS[c]+'22',color:CAT_COLORS[c],fontWeight:700,marginRight:5}}>{c}</span>
+                  <span style={{fontWeight:700,color:'#111'}}>{fmtB(d.sell)}</span>
+                  <span style={{color:ap>=100?'#16a34a':ap>=80?'#f59e0b':'#ef4444',marginLeft:5,fontWeight:600}}>{ap}%</span>
+                </div>
+              );})}
+            </div>
+          )}
+          {CATS.map(c=>{
+            const sit=fb.catSituations?.[c];const cmt=fb.catComments?.[c];
+            if(!sit&&!cmt)return null;
+            return(<div key={c} style={{marginBottom:8,padding:'10px 12px',borderRadius:10,border:`1.5px solid ${CAT_COLORS[c]}33`,background:CAT_COLORS[c]+'06'}}>
+              <span style={{padding:'2px 8px',borderRadius:10,background:CAT_COLORS[c],color:'#fff',fontSize:11,fontWeight:700,marginRight:8}}>{c}</span>
+              {sit&&<span style={{fontSize:12,color:'#6b7280',marginRight:8}}>📍 {sit}</span>}
+              {cmt&&<span style={{fontSize:13,color:'#374151'}}>{cmt}</span>}
+            </div>);
+          })}
+          <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginTop:4}}>
+            {fb.issues?.map(i=><span key={i} style={{padding:'3px 8px',borderRadius:16,background:'#fee2e2',color:'#dc2626',fontSize:11,fontWeight:600}}>{i}</span>)}
+          </div>
+          {fb.overallComment&&<p style={{margin:'8px 0 0',fontSize:13,color:'#374151'}}>{fb.overallComment}</p>}
+        </div>
+      ))
+    }
+  </div>);
+}
+
+// ============================================================
+// SETUP SHEETS
+// ============================================================
+function SetupPage({sheetsUrl,onSaveUrl}){
+  const [url,setUrl]=useState(sheetsUrl||'');
+  const [saved,setSaved]=useState(false);
+
+  const code=`function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    appendRow(ss, "ALL", [
+      data.submittedAt, data.week, data.region, data.as_code, data.site,
+      data.submitterName, (data.issues||[]).join(", "), data.overallComment,
+      data.catSituations?.REF, data.catComments?.REF, data.sales?.REF?.sell, data.sales?.REF?.target,
+      data.catSituations?.WM, data.catComments?.WM, data.sales?.WM?.sell, data.sales?.WM?.target,
+      data.catSituations?.AC, data.catComments?.AC, data.sales?.AC?.sell, data.sales?.AC?.target,
+    ]);
+
+    ["REF","WM","AC"].forEach(cat => {
+      appendRow(ss, cat, [
+        data.submittedAt, data.week, data.region, data.as_code, data.site,
+        data.submitterName, data.catSituations?.[cat], data.catComments?.[cat],
+        data.sales?.[cat]?.sell, data.sales?.[cat]?.target,
+        (data.issues||[]).join(", "),
+      ]);
+    });
+
+    return ContentService.createTextOutput(JSON.stringify({status:"ok"}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({status:"error",msg:err.message}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function appendRow(ss, sheetName, row) {
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    const headers = {
+      ALL: ["Timestamp","Week","Region","AS Code","Site","รหัสพนักงาน","ปัญหา","ความเห็นรวม",
+            "REF Situation","REF Comment","REF Sell","REF Target",
+            "WM Situation","WM Comment","WM Sell","WM Target",
+            "AC Situation","AC Comment","AC Sell","AC Target"],
+      REF: ["Timestamp","Week","Region","AS Code","Site","รหัสพนักงาน","Situation","Comment","Sell","Target","ปัญหา"],
+      WM:  ["Timestamp","Week","Region","AS Code","Site","รหัสพนักงาน","Situation","Comment","Sell","Target","ปัญหา"],
+      AC:  ["Timestamp","Week","Region","AS Code","Site","รหัสพนักงาน","Situation","Comment","Sell","Target","ปัญหา"],
+    };
+    sheet.appendRow(headers[sheetName]||["Data"]);
+    sheet.getRange(1,1,1,sheet.getLastColumn())
+      .setBackground("#1e293b").setFontColor("#ffffff").setFontWeight("bold");
+  }
+  sheet.appendRow(row);
+}`;
+
+  return(<div style={{maxWidth:720,margin:'0 auto'}}>
+    {saved&&<div style={{padding:'14px 18px',borderRadius:12,background:'#dcfce7',border:'1px solid #86efac',color:'#16a34a',fontWeight:600,marginBottom:20}}>✓ บันทึก URL แล้ว!</div>}
+    <div style={card}>
+      <h3 style={{margin:'0 0 6px',fontSize:18,fontWeight:700}}>เชื่อมต่อ Google Sheets</h3>
+      <p style={{margin:'0 0 20px',color:'#6b7280',fontSize:14}}>ทำตาม 3 ขั้นตอน แล้ว Feedback จะส่งเข้า Google Sheets อัตโนมัติ</p>
+      {[
+        {n:'1',t:'สร้าง Google Sheet ใหม่',d:'เปิด sheets.google.com → สร้าง Spreadsheet ใหม่'},
+        {n:'2',t:'เพิ่ม Apps Script',d:'Extensions → Apps Script → ลบ code เดิม → วาง code ด้านล่าง → กด Save (Ctrl+S)'},
+        {n:'3',t:'Deploy Web App',d:'Deploy → New deployment → Type: Web app\nExecute as: Me | Who has access: Anyone\nคลิก Deploy → Copy URL'},
+      ].map(({n,t,d})=>(
+        <div key={n} style={{display:'flex',gap:14,marginBottom:20}}>
+          <div style={{width:32,height:32,borderRadius:'50%',background:'#1e293b',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontWeight:700,flexShrink:0}}>{n}</div>
+          <div><div style={{fontWeight:700,fontSize:14,marginBottom:4}}>{t}</div><div style={{fontSize:13,color:'#6b7280',whiteSpace:'pre-line'}}>{d}</div></div>
+        </div>
+      ))}
+
+      <div style={{background:'#0f172a',borderRadius:10,padding:'14px 16px',marginBottom:20}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+          <span style={{fontSize:11,color:'#64748b',fontWeight:700,fontFamily:'monospace'}}>Apps Script Code</span>
+          <button onClick={()=>navigator.clipboard.writeText(code).then(()=>alert('คัดลอกแล้ว!'))}
+            style={{padding:'4px 12px',borderRadius:6,border:'1px solid #334155',background:'transparent',color:'#94a3b8',fontSize:11,cursor:'pointer'}}>
+            📋 Copy
+          </button>
+        </div>
+        <pre style={{margin:0,fontSize:11,color:'#e2e8f0',fontFamily:'monospace',whiteSpace:'pre-wrap',lineHeight:1.6,maxHeight:200,overflow:'auto'}}>{code}</pre>
+      </div>
+
+      <label style={lbl}>วาง Web App URL ที่ได้จาก Deploy</label>
+      <input value={url} onChange={e=>setUrl(e.target.value)} placeholder='https://script.google.com/macros/s/.../exec' style={{...inp,marginBottom:12}}/>
+      <button onClick={async()=>{await onSaveUrl(url);setSaved(true);setTimeout(()=>setSaved(false),3000);}}
+        disabled={!url.includes('script.google.com')}
+        style={btn(!url.includes('script.google.com')?'#e5e7eb':'#16a34a',!url.includes('script.google.com'))}>
+        บันทึกและเชื่อมต่อ Google Sheets
+      </button>
+      {sheetsUrl&&<p style={{margin:'10px 0 0',fontSize:12,color:'#6b7280'}}>✓ เชื่อมต่ออยู่แล้ว</p>}
+    </div>
+  </div>);
+}
+
+// ============================================================
+// APP
+// ============================================================
+function App(){
+  const [page,setPage]=useState('survey');
+  const [feedbacks,setFeedbacks]=useState([]);
+  const [sheetsUrl,setSheetsUrl]=useState('');
+  const [loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    const fd=storage.get('wss_feedbacks_v2');
+    const su=storage.get('wss_sheets_url');
+    if(fd)setFeedbacks(JSON.parse(fd.value));
+    if(su)setSheetsUrl(JSON.parse(su.value));
+    setLoading(false);
+  },[]);
+
+  const handleSubmit=useCallback(async(fb)=>{
+    const updated=[...feedbacks,fb];
+    setFeedbacks(updated);
+    storage.set('wss_feedbacks_v2',JSON.stringify(updated));
+    if(sheetsUrl){
+      try{
+        await fetch(sheetsUrl,{method:'POST',body:JSON.stringify(fb),headers:{'Content-Type':'application/json'}});
+      }catch(e){console.warn('Sheets sync failed:',e);}
+    }
+  },[feedbacks,sheetsUrl]);
+
+  const handleSaveUrl=useCallback(async(url)=>{
+    setSheetsUrl(url);
+    storage.set('wss_sheets_url',JSON.stringify(url));
+  },[]);
+
+  const pending=MASTER_SITES.filter(s=>!feedbacks.some(f=>f.site===s.site&&f.week===THIS_WEEK)).length;
+  const navItems=[
+    {id:'survey',label:'Survey',icon:'📋'},
+    {id:'dashboard',label:'Dashboard',icon:'📊'},
+    {id:'history',label:'ประวัติ',icon:'🕐'},
+    {id:'setup',label:'Setup Sheets',icon:'⚙️',dot:!sheetsUrl},
+  ];
+
+  if(loading)return(
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div style={{textAlign:'center'}}>
+        <div style={{width:44,height:44,borderRadius:'50%',border:'4px solid #e5e7eb',borderTopColor:'#1e293b',animation:'spin .8s linear infinite',margin:'0 auto 14px'}}/>
+        <p style={{color:'#6b7280'}}>กำลังโหลด...</p>
+      </div>
+    </div>
+  );
+
+  return(
+    <div style={{minHeight:'100vh',background:'#f1f5f9'}}>
+      <div style={{background:'#0f172a',color:'#fff',padding:'0 20px'}}>
+        <div style={{maxWidth:1100,margin:'0 auto',display:'flex',alignItems:'center',gap:16,height:58}}>
+          <div>
+            <div style={{fontWeight:800,fontSize:16}}>📊 Weekly Sales Survey</div>
+            <div style={{fontSize:10,color:'#475569',marginTop:1}}>{THIS_WEEK}</div>
+          </div>
+          <div style={{fontSize:11,color:'#475569',background:'rgba(255,255,255,.07)',padding:'3px 10px',borderRadius:20}}>
+            {MASTER_SITES.length} sites · 5 regions
+          </div>
+          <div style={{marginLeft:'auto',display:'flex',gap:3}}>
+            {navItems.map(n=>(
+              <button key={n.id} onClick={()=>setPage(n.id)}
+                style={{display:'flex',alignItems:'center',gap:6,padding:'7px 13px',borderRadius:8,border:'none',background:page===n.id?'rgba(255,255,255,.12)':'transparent',color:page===n.id?'#fff':'#94a3b8',fontSize:13,fontWeight:page===n.id?700:500,cursor:'pointer',position:'relative'}}>
+                {n.icon} {n.label}
+                {n.dot&&<span style={{position:'absolute',top:3,right:3,width:7,height:7,borderRadius:'50%',background:'#ef4444'}}/>}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{maxWidth:1100,margin:'0 auto',padding:'24px 20px'}}>
+        {pending>0&&page!=='setup'&&(
+          <div style={{padding:'11px 16px',borderRadius:12,background:'#fffbeb',border:'1px solid #fbbf24',color:'#92400e',fontSize:13,fontWeight:500,marginBottom:18}}>
+            ⚠️ ยังมี <strong>{pending} สาขา</strong> ที่ยังไม่ได้ส่ง Feedback สัปดาห์นี้
+            {!sheetsUrl&&<span style={{marginLeft:12,color:'#d97706'}}>· Google Sheets ยังไม่ได้เชื่อมต่อ</span>}
+          </div>
+        )}
+        {page==='survey'&&<SurveyPage feedbacks={feedbacks} onSubmit={handleSubmit} sheetsUrl={sheetsUrl}/>}
+        {page==='dashboard'&&<DashboardPage feedbacks={feedbacks}/>}
+        {page==='history'&&<HistoryPage feedbacks={feedbacks}/>}
+        {page==='setup'&&<SetupPage sheetsUrl={sheetsUrl} onSaveUrl={handleSaveUrl}/>}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
