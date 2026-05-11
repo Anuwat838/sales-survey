@@ -814,33 +814,47 @@ function App(){
   const [sheetsUrl,setSheetsUrl]=useState('');
   const [liveSales,setLiveSales]=useState(null);
   const [loading,setLoading]=useState(true);
-  const [unlocked,setUnlocked]=useState(false); // passcode state
+  const [unlocked,setUnlocked]=useState(false);
 
+  const SHEETS_URL='https://script.google.com/macros/s/AKfycbxHjV9HshkAbktApcSFSue0bQnFDH_P_BDOWcSrzFFViJvhhpBX89GS6qCSMruaEgHl/exec';
+
+  // โหลด feedbacks จาก localStorage + ดึง sales จาก Sheets ทุกครั้งที่เปิดเว็บ
   useEffect(()=>{
     const fd=storage.get('wss_feedbacks_v2');
-    const su=storage.get('wss_sheets_url');
     const ls=storage.get('wss_live_sales');
     if(fd)setFeedbacks(JSON.parse(fd.value));
-    if(su)setSheetsUrl(JSON.parse(su.value));
     if(ls)setLiveSales(JSON.parse(ls.value));
-    setLoading(false);
+
+    // ดึงข้อมูลยอดขายล่าสุดจาก Google Sheets
+    fetch(`${SHEETS_URL}?action=getSales`)
+      .then(r=>r.json())
+      .then(data=>{
+        if(data.status==='ok'&&data.sites?.length>0){
+          setLiveSales(data.sites);
+          storage.set('wss_live_sales',JSON.stringify(data.sites));
+        }
+      })
+      .catch(()=>{/* ใช้ข้อมูล localStorage แทน */})
+      .finally(()=>setLoading(false));
   },[]);
 
-  // ข้อมูลยอดขายที่ใช้จริง: liveSales ถ้ามี หรือ MASTER_SITES
   const activeSites=liveSales||MASTER_SITES;
 
   const handleUpdateSales=useCallback((newSites)=>{
     setLiveSales(newSites);
     storage.set('wss_live_sales',JSON.stringify(newSites));
+    // sync ขึ้น Sheets ให้ทุกอุปกรณ์เห็น
+    fetch(SHEETS_URL,{
+      method:'POST',
+      body:JSON.stringify({action:'updateSales',sites:newSites,updatedAt:new Date().toISOString()}),
+      headers:{'Content-Type':'application/json'},
+    }).catch(e=>console.warn('Sync sales failed:',e));
   },[]);
-
-  const SHEETS_URL='https://script.google.com/macros/s/AKfycbydPEC6UO0GVdl55KzuDokEFC5WGRBVaQhHSpdrj6N6dDzAFR5ZajwC6qYaN5aaYTXA/exec';
 
   const handleSubmit=useCallback(async(fb)=>{
     const updated=[...feedbacks,fb];
     setFeedbacks(updated);
     storage.set('wss_feedbacks_v2',JSON.stringify(updated));
-    // ใช้ GET + encodeURIComponent แทน POST เพื่อหลีกเลี่ยง CORS
     try{
       const encoded=encodeURIComponent(JSON.stringify(fb));
       await fetch(`${SHEETS_URL}?data=${encoded}`,{method:'GET',mode:'no-cors'});
