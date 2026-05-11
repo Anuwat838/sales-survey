@@ -244,7 +244,7 @@ function DashboardPage({feedbacks,activeSites}){
   const [af,setAf]=useState('ALL');
   const [ac,setAc]=useState('ALL'); // account filter
   const [cv,setCv]=useState('REF');
-  const [sb,setSb]=useState('ach');
+  const [sb,setSb]=useState('ach_asc'); // default: ach% ต่ำสุดขึ้นก่อน
 
   const regions=[...new Set(activeSites.map(s=>s.region))].sort();
 
@@ -273,7 +273,12 @@ function DashboardPage({feedbacks,activeSites}){
   const fbMap={};
   feedbacks.filter(f=>f.week===THIS_WEEK).forEach(f=>{fbMap[f.site]=f;});
   const rows=sites.map(s=>({...s,fb:fbMap[s.site]||null,submitted:!!fbMap[s.site]}));
-  const sorted=[...rows].sort((a,b)=>sb==='ach'?achPct(b[cv].sell,b[cv].target)-achPct(a[cv].sell,a[cv].target):b[cv].sell-a[cv].sell);
+  const sorted=[...rows].sort((a,b)=>{
+    if(sb==='ach_asc') return achPct(a[cv].sell,a[cv].target)-achPct(b[cv].sell,b[cv].target);
+    if(sb==='ach_desc') return achPct(b[cv].sell,b[cv].target)-achPct(a[cv].sell,a[cv].target);
+    if(sb==='sell') return b[cv].sell-a[cv].sell;
+    return 0;
+  });
   const ts=sites.reduce((s,x)=>s+x[cv].sell,0);
   const tt=sites.reduce((s,x)=>s+x[cv].target,0);
   const sub=rows.filter(r=>r.submitted).length;
@@ -315,7 +320,7 @@ function DashboardPage({feedbacks,activeSites}){
         ))}
       </div>
       <div style={{display:'flex',gap:6,marginLeft:'auto'}}>
-        {[['ach','% เป้า'],['sell','ยอดขาย']].map(([v,l])=>(
+        {[['ach_asc','% เป้า ↑ต่ำ'],['ach_desc','% เป้า ↓สูง'],['sell','ยอดขาย']].map(([v,l])=>(
           <button key={v} onClick={()=>setSb(v)}
             style={{padding:'9px 14px',borderRadius:10,border:`2px solid ${sb===v?'#1e293b':'#e5e7eb'}`,background:sb===v?'#1e293b':'#fff',color:sb===v?'#fff':'#6b7280',fontSize:13,fontWeight:600,cursor:'pointer'}}>
             {l}
