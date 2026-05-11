@@ -501,6 +501,75 @@ function appendRow(ss, sheetName, row) {
 }
 
 // ============================================================
+// PASSCODE LOCK
+// ============================================================
+const ADMIN_PASSCODE = '1234'; // ← เปลี่ยน passcode ที่นี่ได้เลยครับ
+
+function PasscodeLock({onUnlock,title}){
+  const [input,setInput]=useState('');
+  const [error,setError]=useState(false);
+  const [shake,setShake]=useState(false);
+
+  function handleKey(k){
+    if(input.length>=6)return;
+    const next=input+k;
+    setInput(next);
+    setError(false);
+    if(next.length===ADMIN_PASSCODE.length){
+      if(next===ADMIN_PASSCODE){
+        onUnlock();
+      } else {
+        setShake(true);
+        setError(true);
+        setTimeout(()=>{setInput('');setShake(false);},600);
+      }
+    }
+  }
+
+  function handleDel(){setInput(p=>p.slice(0,-1));setError(false);}
+
+  const keys=['1','2','3','4','5','6','7','8','9','','0','⌫'];
+
+  return(
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'60vh'}}>
+      <div style={{background:'#fff',borderRadius:20,padding:'36px 32px',boxShadow:'0 8px 40px rgba(0,0,0,.12)',textAlign:'center',width:300}}>
+        <div style={{fontSize:32,marginBottom:8}}>🔒</div>
+        <h3 style={{margin:'0 0 4px',fontSize:18,fontWeight:700,color:'#111'}}>{title}</h3>
+        <p style={{margin:'0 0 24px',fontSize:13,color:'#9ca3af'}}>กรอก Passcode เพื่อเข้าใช้งาน</p>
+
+        {/* Dots */}
+        <div style={{display:'flex',justifyContent:'center',gap:12,marginBottom:28,
+          animation:shake?'shake .4s ease':'none'}}>
+          {Array.from({length:ADMIN_PASSCODE.length}).map((_,i)=>(
+            <div key={i} style={{width:14,height:14,borderRadius:'50%',
+              background:i<input.length?(error?'#ef4444':'#1e293b'):'#e5e7eb',
+              transition:'background .15s'}}/>
+          ))}
+        </div>
+
+        {/* Keypad */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
+          {keys.map((k,i)=>(
+            <button key={i} onClick={()=>k==='⌫'?handleDel():k?handleKey(k):null}
+              disabled={!k}
+              style={{padding:'16px 0',borderRadius:12,border:'none',
+                background:k?'#f1f5f9':'transparent',
+                color:k==='⌫'?'#ef4444':'#1e293b',
+                fontSize:k==='⌫'?20:20,fontWeight:700,cursor:k?'pointer':'default',
+                transition:'all .1s',opacity:k?1:0}}>
+              {k}
+            </button>
+          ))}
+        </div>
+
+        {error&&<p style={{margin:'16px 0 0',fontSize:13,color:'#ef4444',fontWeight:600}}>Passcode ไม่ถูกต้อง</p>}
+      </div>
+      <style>{`@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-8px)}80%{transform:translateX(4px)}}`}</style>
+    </div>
+  );
+}
+
+// ============================================================
 // ADMIN PAGE — อัพโหลด Excel/CSV อัพเดตยอดขาย
 // ============================================================
 function AdminPage({onUpdateSales}){
@@ -711,8 +780,9 @@ function App(){
   const [page,setPage]=useState('survey');
   const [feedbacks,setFeedbacks]=useState([]);
   const [sheetsUrl,setSheetsUrl]=useState('');
-  const [liveSales,setLiveSales]=useState(null); // null = ใช้ MASTER_SITES
+  const [liveSales,setLiveSales]=useState(null);
   const [loading,setLoading]=useState(true);
+  const [unlocked,setUnlocked]=useState(false); // passcode state
 
   useEffect(()=>{
     const fd=storage.get('wss_feedbacks_v2');
@@ -750,13 +820,20 @@ function App(){
     storage.set('wss_sheets_url',JSON.stringify(url));
   },[]);
 
+  const PROTECTED=['admin','setup'];
+  function handleNav(id){
+    if(PROTECTED.includes(id)&&!unlocked) setUnlocked(false);
+    if(PROTECTED.includes(page)&&!PROTECTED.includes(id)) setUnlocked(false);
+    setPage(id);
+  }
+
   const pending=activeSites.filter(s=>!feedbacks.some(f=>f.site===s.site&&f.week===THIS_WEEK)).length;
   const navItems=[
     {id:'survey',label:'Survey',icon:'📋'},
     {id:'dashboard',label:'Dashboard',icon:'📊'},
     {id:'history',label:'ประวัติ',icon:'🕐'},
-    {id:'admin',label:'Admin',icon:'📤',dot:false},
-    {id:'setup',label:'Setup Sheets',icon:'⚙️',dot:!sheetsUrl},
+    {id:'admin',label:'Admin',icon:'📤',lock:true},
+    {id:'setup',label:'Setup Sheets',icon:'⚙️',lock:true,dot:!sheetsUrl},
   ];
 
   if(loading)return(
@@ -782,9 +859,10 @@ function App(){
           </div>
           <div style={{marginLeft:'auto',display:'flex',gap:3}}>
             {navItems.map(n=>(
-              <button key={n.id} onClick={()=>setPage(n.id)}
+              <button key={n.id} onClick={()=>handleNav(n.id)}
                 style={{display:'flex',alignItems:'center',gap:6,padding:'7px 13px',borderRadius:8,border:'none',background:page===n.id?'rgba(255,255,255,.12)':'transparent',color:page===n.id?'#fff':'#94a3b8',fontSize:13,fontWeight:page===n.id?700:500,cursor:'pointer',position:'relative'}}>
                 {n.icon} {n.label}
+                {n.lock&&<span style={{fontSize:10,opacity:.6}}>🔒</span>}
                 {n.dot&&<span style={{position:'absolute',top:3,right:3,width:7,height:7,borderRadius:'50%',background:'#ef4444'}}/>}
               </button>
             ))}
@@ -802,8 +880,14 @@ function App(){
         {page==='survey'&&<SurveyPage feedbacks={feedbacks} onSubmit={handleSubmit} sheetsUrl={sheetsUrl} activeSites={activeSites}/>}
         {page==='dashboard'&&<DashboardPage feedbacks={feedbacks} activeSites={activeSites}/>}
         {page==='history'&&<HistoryPage feedbacks={feedbacks} activeSites={activeSites}/>}
-        {page==='admin'&&<AdminPage onUpdateSales={handleUpdateSales}/>}
-        {page==='setup'&&<SetupPage sheetsUrl={sheetsUrl} onSaveUrl={handleSaveUrl}/>}
+        {page==='admin'&&(!unlocked
+          ?<PasscodeLock title='Admin — อัพโหลดยอดขาย' onUnlock={()=>setUnlocked(true)}/>
+          :<AdminPage onUpdateSales={handleUpdateSales}/>
+        )}
+        {page==='setup'&&(!unlocked
+          ?<PasscodeLock title='Setup Google Sheets' onUnlock={()=>setUnlocked(true)}/>
+          :<SetupPage sheetsUrl={sheetsUrl} onSaveUrl={handleSaveUrl}/>
+        )}
       </div>
     </div>
   );
