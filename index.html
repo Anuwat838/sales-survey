@@ -677,8 +677,12 @@ function AdminPage({onUpdateSales}){
     handleFile(e.dataTransfer.files[0]);
   }
 
-  function confirmUpdate(){
-    onUpdateSales(preview);
+  const [syncing,setSyncing]=useState(false);
+
+  async function confirmUpdate(){
+    setSyncing(true);
+    await onUpdateSales(preview);
+    setSyncing(false);
     setSaved(true);
     setPreview(null);
     setTimeout(()=>setSaved(false),4000);
@@ -743,9 +747,9 @@ function AdminPage({onUpdateSales}){
               style={{padding:'10px 18px',borderRadius:10,border:'2px solid #e5e7eb',background:'#fff',color:'#6b7280',fontWeight:600,cursor:'pointer',fontSize:13}}>
               ยกเลิก
             </button>
-            <button onClick={confirmUpdate}
-              style={{padding:'10px 22px',borderRadius:10,border:'none',background:'linear-gradient(135deg,#16a34a,#15803d)',color:'#fff',fontWeight:700,cursor:'pointer',fontSize:14}}>
-              ✓ ยืนยันอัพเดต {totalSites} สาขา
+            <button onClick={confirmUpdate} disabled={syncing}
+              style={{padding:'10px 22px',borderRadius:10,border:'none',background:syncing?'#6b7280':'linear-gradient(135deg,#16a34a,#15803d)',color:'#fff',fontWeight:700,cursor:syncing?'not-allowed':'pointer',fontSize:14}}>
+              {syncing?'⏳ กำลัง Sync...':'✓ ยืนยันอัพเดต '+totalSites+' สาขา'}
             </button>
           </div>
         </div>
@@ -816,7 +820,7 @@ function App(){
   const [loading,setLoading]=useState(true);
   const [unlocked,setUnlocked]=useState(false);
 
-  const SHEETS_URL='https://script.google.com/macros/s/AKfycbzXUClH7O4elWsU47aGWm3cjpxEfI27jgf0OFqAL2Dn8TQwQv11fdvcLsrWAD7pO8tB/exec';
+  const SHEETS_URL='https://script.google.com/macros/s/AKfycbwgqtEp_6RNtMDcopoerzdCdbi3bcZxW2AGA_vr5FqlCfrx0zfQ29k91Rjq4e5zhzw5/exec';
 
   // โหลด feedbacks จาก localStorage + ดึง sales จาก Sheets ทุกครั้งที่เปิดเว็บ
   useEffect(()=>{
@@ -840,14 +844,28 @@ function App(){
 
   const activeSites=liveSales||MASTER_SITES;
 
-  const handleUpdateSales=useCallback((newSites)=>{
+  const handleUpdateSales=useCallback(async(newSites)=>{
     setLiveSales(newSites);
     storage.set('wss_live_sales',JSON.stringify(newSites));
-    // ส่งผ่าน GET แก้ปัญหา CORS จาก GitHub Pages
+
+    // ส่งทีละ 30 สาขา เพราะ GET URL มีขีดจำกัดความยาว
+    const BATCH=30;
+    const total=Math.ceil(newSites.length/BATCH);
     try{
-      const payload={action:'updateSales',sites:newSites,updatedAt:new Date().toISOString()};
-      const encoded=encodeURIComponent(JSON.stringify(payload));
-      fetch(`${SHEETS_URL}?data=${encoded}`,{method:'GET',mode:'no-cors'});
+      for(let i=0;i<total;i++){
+        const batch=newSites.slice(i*BATCH,(i+1)*BATCH);
+        const payload={
+          action:'updateSales',
+          batch:i,
+          totalBatch:total,
+          sites:batch,
+          updatedAt:new Date().toISOString()
+        };
+        const encoded=encodeURIComponent(JSON.stringify(payload));
+        await fetch(`${SHEETS_URL}?data=${encoded}`,{method:'GET',mode:'no-cors'});
+        // หน่วงเวลาเล็กน้อยระหว่าง batch
+        await new Promise(r=>setTimeout(r,500));
+      }
     }catch(e){console.warn('Sync sales failed:',e);}
   },[]);
 
