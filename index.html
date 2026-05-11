@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Sarabun','Prompt',sans-serif;background:#f1f5f9;min-height:100vh}
@@ -81,7 +82,7 @@ const btn=(bg,dis=false)=>({width:'100%',padding:14,borderRadius:12,border:'none
 // ============================================================
 // SURVEY
 // ============================================================
-function SurveyPage({feedbacks,onSubmit,sheetsUrl}){
+function SurveyPage({feedbacks,onSubmit,sheetsUrl,activeSites}){
   const [region,setRegion]=useState('');
   const [asCode,setAsCode]=useState('');
   const [site,setSite]=useState('');
@@ -89,9 +90,20 @@ function SurveyPage({feedbacks,onSubmit,sheetsUrl}){
   const [busy,setBusy]=useState(false);
   const [form,setForm]=useState({empId:'',catComments:{REF:'',WM:'',AC:''},catSituations:{REF:'',WM:'',AC:''},issues:[],overallComment:''});
 
-  const asCodes=region?[...REGION_AS_MAP[region]].sort():[];
-  const sites=asCode?AS_SITES_MAP[asCode]||[]:[];
-  const siteData=MASTER_SITES.find(s=>s.site===site);
+  // build hierarchy from activeSites
+  const regions=[...new Set(activeSites.map(s=>s.region))].sort();
+  const regionASMap={};
+  const asSitesMap={};
+  activeSites.forEach(s=>{
+    if(!regionASMap[s.region])regionASMap[s.region]=new Set();
+    regionASMap[s.region].add(s.as_code);
+    if(!asSitesMap[s.as_code])asSitesMap[s.as_code]=[];
+    asSitesMap[s.as_code].push(s);
+  });
+
+  const asCodes=region?[...( regionASMap[region]||new Set())].sort():[];
+  const sites=asCode?asSitesMap[asCode]||[]:[];
+  const siteData=activeSites.find(s=>s.site===site);
   const done=feedbacks.some(f=>f.site===site&&f.week===THIS_WEEK);
 
   const toggleIssue=i=>setForm(p=>({...p,issues:p.issues.includes(i)?p.issues.filter(x=>x!==i):[...p.issues,i]}));
@@ -124,7 +136,7 @@ function SurveyPage({feedbacks,onSubmit,sheetsUrl}){
         <label style={lbl}>1. เลือก Region</label>
         <select value={region} onChange={e=>{setRegion(e.target.value);setAsCode('');setSite('');}} style={sel}>
           <option value=''>-- เลือก Region --</option>
-          {REGIONS.map(r=><option key={r}>{r}</option>)}
+          {regions.map(r=><option key={r}>{r}</option>)}
         </select>
         {region&&<>
           <label style={{...lbl,marginTop:14}}>2. เลือก AS Code</label>
@@ -227,12 +239,25 @@ function SurveyPage({feedbacks,onSubmit,sheetsUrl}){
 // ============================================================
 // DASHBOARD
 // ============================================================
-function DashboardPage({feedbacks}){
+function DashboardPage({feedbacks,activeSites}){
   const [rf,setRf]=useState('ALL');
+  const [af,setAf]=useState('ALL');
   const [cv,setCv]=useState('REF');
   const [sb,setSb]=useState('ach');
 
-  const sites=rf==='ALL'?MASTER_SITES:MASTER_SITES.filter(s=>s.region===rf);
+  const regions=[...new Set(activeSites.map(s=>s.region))].sort();
+  // AS Codes ที่แสดงขึ้นอยู่กับ Region ที่เลือก
+  const availableAS=[...new Set(
+    (rf==='ALL'?activeSites:activeSites.filter(s=>s.region===rf)).map(s=>s.as_code)
+  )].sort();
+
+  // reset AS filter เมื่อเปลี่ยน Region
+  const handleRegionChange=e=>{setRf(e.target.value);setAf('ALL');};
+
+  const sites=activeSites.filter(s=>
+    (rf==='ALL'||s.region===rf)&&
+    (af==='ALL'||s.as_code===af)
+  );
   const fbMap={};
   feedbacks.filter(f=>f.week===THIS_WEEK).forEach(f=>{fbMap[f.site]=f;});
   const rows=sites.map(s=>({...s,fb:fbMap[s.site]||null,submitted:!!fbMap[s.site]}));
@@ -257,9 +282,13 @@ function DashboardPage({feedbacks}){
     </div>
 
     <div style={{display:'flex',gap:10,marginBottom:14,flexWrap:'wrap',alignItems:'center'}}>
-      <select value={rf} onChange={e=>setRf(e.target.value)} style={{...sel,width:'auto',padding:'9px 14px'}}>
+      <select value={rf} onChange={handleRegionChange} style={{...sel,width:'auto',padding:'9px 14px'}}>
         <option value='ALL'>ทุก Region</option>
-        {REGIONS.map(r=><option key={r}>{r}</option>)}
+        {regions.map(r=><option key={r}>{r}</option>)}
+      </select>
+      <select value={af} onChange={e=>setAf(e.target.value)} style={{...sel,width:'auto',padding:'9px 14px'}}>
+        <option value='ALL'>ทุก AS Code</option>
+        {availableAS.map(a=><option key={a}>{a}</option>)}
       </select>
       <div style={{display:'flex',gap:6}}>
         {CATS.map(c=>(
@@ -315,17 +344,18 @@ function DashboardPage({feedbacks}){
 // ============================================================
 // HISTORY
 // ============================================================
-function HistoryPage({feedbacks}){
+function HistoryPage({feedbacks,activeSites}){
   const [rf,setRf]=useState('ALL');
   const [af,setAf]=useState('ALL');
-  const allAS=[...new Set(MASTER_SITES.map(s=>s.as_code))].sort();
+  const regions=[...new Set(activeSites.map(s=>s.region))].sort();
+  const allAS=[...new Set(activeSites.map(s=>s.as_code))].sort();
   const filtered=feedbacks.filter(f=>(rf==='ALL'||f.region===rf)&&(af==='ALL'||f.as_code===af))
     .sort((a,b)=>new Date(b.submittedAt)-new Date(a.submittedAt));
 
   return(<div>
     <div style={{display:'flex',gap:10,marginBottom:18,flexWrap:'wrap'}}>
       <select value={rf} onChange={e=>setRf(e.target.value)} style={{...sel,width:'auto',padding:'9px 14px'}}>
-        <option value='ALL'>ทุก Region</option>{REGIONS.map(r=><option key={r}>{r}</option>)}
+        <option value='ALL'>ทุก Region</option>{regions.map(r=><option key={r}>{r}</option>)}
       </select>
       <select value={af} onChange={e=>setAf(e.target.value)} style={{...sel,width:'auto',padding:'9px 14px'}}>
         <option value='ALL'>ทุก AS Code</option>{allAS.map(a=><option key={a}>{a}</option>)}
@@ -471,20 +501,235 @@ function appendRow(ss, sheetName, row) {
 }
 
 // ============================================================
+// ADMIN PAGE — อัพโหลด Excel/CSV อัพเดตยอดขาย
+// ============================================================
+function AdminPage({onUpdateSales}){
+  const [preview,setPreview]=useState(null);
+  const [errors,setErrors]=useState([]);
+  const [saved,setSaved]=useState(false);
+  const [dragging,setDragging]=useState(false);
+  const fileRef=useRef(null);
+
+  // คอลัมน์ที่ต้องการจาก Excel (ตรงกับ BIG_C format)
+  // Region | AS codename | Site Name | REF Sell Out | REF Target | ... | WM Sell Out | WM Target | ... | AC Sell Out | AC Target
+  function parseWorkbook(wb){
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    if(rows.length<2){setErrors(['ไม่พบข้อมูลในไฟล์']);return;}
+
+    const header=rows[0].map(h=>String(h).trim());
+    // หา index คอลัมน์
+    const findCol=(keywords)=>{
+      const idx=header.findIndex(h=>keywords.some(k=>h.toLowerCase().includes(k.toLowerCase())));
+      return idx;
+    };
+    const iRegion=findCol(['region']);
+    const iAS=findCol(['as code','as codename','codename']);
+    const iSite=findCol(['site name','site']);
+    const iREFSell=findCol(['ref sell','ref so']);
+    const iREFTarget=findCol(['ref target']);
+    const iWMSell=findCol(['wm sell','wm so']);
+    const iWMTarget=findCol(['wm target']);
+    const iACSell=findCol(['ac sell','ac so']);
+    const iACTarget=findCol(['ac target']);
+    const iPCStatus=findCol(['pc status','status']);
+
+    const errs=[];
+    if(iRegion<0)errs.push('ไม่พบคอลัมน์ Region');
+    if(iSite<0)errs.push('ไม่พบคอลัมน์ Site Name');
+    if(iREFSell<0)errs.push('ไม่พบคอลัมน์ REF Sell Out');
+    if(errs.length){setErrors(errs);return;}
+
+    const parsed=[];
+    rows.slice(1).forEach((row,i)=>{
+      const region=String(row[iRegion]||'').trim();
+      const as_code=String(row[iAS]||'').trim();
+      const site=String(row[iSite]||'').trim();
+      if(!region||!site||region==='NA')return;
+      parsed.push({
+        region, as_code, site,
+        REF:{sell:Number(row[iREFSell])||0, target:Number(row[iREFTarget])||0},
+        WM:{sell:Number(row[iWMSell])||0, target:Number(row[iWMTarget])||0},
+        AC:{sell:Number(row[iACSell])||0, target:Number(row[iACTarget])||0},
+        pc_status:String(row[iPCStatus]||'').trim(),
+      });
+    });
+
+    if(parsed.length===0){setErrors(['ไม่พบข้อมูลสาขา ตรวจสอบชื่อคอลัมน์ครับ']);return;}
+    setErrors([]);
+    setPreview(parsed);
+  }
+
+  function handleFile(file){
+    if(!file)return;
+    const ext=file.name.split('.').pop().toLowerCase();
+    if(!['xlsx','xls','csv'].includes(ext)){setErrors(['รองรับเฉพาะ .xlsx, .xls, .csv เท่านั้น']);return;}
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        const wb=XLSX.read(e.target.result,{type:'array'});
+        parseWorkbook(wb);
+      }catch(err){setErrors(['อ่านไฟล์ไม่สำเร็จ: '+err.message]);}
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function handleDrop(e){
+    e.preventDefault();setDragging(false);
+    handleFile(e.dataTransfer.files[0]);
+  }
+
+  function confirmUpdate(){
+    onUpdateSales(preview);
+    setSaved(true);
+    setPreview(null);
+    setTimeout(()=>setSaved(false),4000);
+  }
+
+  const regions=[...new Set((preview||[]).map(s=>s.region))];
+  const totalSites=(preview||[]).length;
+
+  return(<div style={{maxWidth:760,margin:'0 auto'}}>
+    {saved&&(
+      <div style={{padding:'16px 20px',borderRadius:12,background:'#dcfce7',border:'1px solid #86efac',color:'#16a34a',fontWeight:700,marginBottom:20,fontSize:15}}>
+        ✓ อัพเดตยอดขายสำเร็จ! {totalSites} สาขา — ระบบใช้ข้อมูลใหม่ทันที
+      </div>
+    )}
+
+    {/* Upload Zone */}
+    <div style={card}>
+      <h3 style={{margin:'0 0 4px',fontSize:18,fontWeight:700}}>📤 อัพโหลดไฟล์ยอดขาย</h3>
+      <p style={{margin:'0 0 20px',color:'#6b7280',fontSize:13}}>รองรับ .xlsx / .xls / .csv · โครงสร้างเดิมจาก BIG_C_APR_2026.xlsx</p>
+
+      {/* Drop Zone */}
+      <div
+        onDragOver={e=>{e.preventDefault();setDragging(true);}}
+        onDragLeave={()=>setDragging(false)}
+        onDrop={handleDrop}
+        onClick={()=>fileRef.current.click()}
+        style={{border:`2px dashed ${dragging?'#3b82f6':'#cbd5e1'}`,borderRadius:14,padding:'40px 20px',textAlign:'center',cursor:'pointer',background:dragging?'#eff6ff':'#f8fafc',transition:'all .2s',marginBottom:16}}>
+        <div style={{fontSize:40,marginBottom:12}}>📁</div>
+        <div style={{fontWeight:700,fontSize:15,color:'#1e293b',marginBottom:6}}>ลากไฟล์มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</div>
+        <div style={{fontSize:12,color:'#94a3b8'}}>.xlsx · .xls · .csv</div>
+        <input ref={fileRef} type='file' accept='.xlsx,.xls,.csv' style={{display:'none'}} onChange={e=>handleFile(e.target.files[0])}/>
+      </div>
+
+      {/* รูปแบบคอลัมน์ที่ต้องการ */}
+      <div style={{padding:'12px 16px',borderRadius:10,background:'#f1f5f9',fontSize:12,color:'#475569'}}>
+        <div style={{fontWeight:700,marginBottom:6}}>📋 คอลัมน์ที่ต้องมีในไฟล์</div>
+        <div style={{display:'flex',flexWrap:'wrap',gap:'6px 16px'}}>
+          {['Region','AS codename','Site Name','REF Sell Out','REF Target','WM Sell Out','WM Target','AC Sell Out','AC Target','PC Status'].map(c=>(
+            <span key={c} style={{padding:'2px 8px',borderRadius:8,background:'#e2e8f0',fontFamily:'monospace',fontSize:11}}>{c}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* Errors */}
+      {errors.length>0&&(
+        <div style={{marginTop:14,padding:'12px 16px',borderRadius:10,background:'#fef2f2',border:'1px solid #fecaca',color:'#dc2626',fontSize:13}}>
+          {errors.map((e,i)=><div key={i}>⚠️ {e}</div>)}
+        </div>
+      )}
+    </div>
+
+    {/* Preview */}
+    {preview&&(
+      <div style={{...card,marginTop:16}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,flexWrap:'wrap',gap:10}}>
+          <div>
+            <h4 style={{margin:0,fontSize:16,fontWeight:700}}>ตัวอย่างข้อมูลที่จะอัพเดต</h4>
+            <p style={{margin:'4px 0 0',fontSize:13,color:'#6b7280'}}>{totalSites} สาขา · {regions.length} Region</p>
+          </div>
+          <div style={{display:'flex',gap:10}}>
+            <button onClick={()=>{setPreview(null);setErrors([]);}}
+              style={{padding:'10px 18px',borderRadius:10,border:'2px solid #e5e7eb',background:'#fff',color:'#6b7280',fontWeight:600,cursor:'pointer',fontSize:13}}>
+              ยกเลิก
+            </button>
+            <button onClick={confirmUpdate}
+              style={{padding:'10px 22px',borderRadius:10,border:'none',background:'linear-gradient(135deg,#16a34a,#15803d)',color:'#fff',fontWeight:700,cursor:'pointer',fontSize:14}}>
+              ✓ ยืนยันอัพเดต {totalSites} สาขา
+            </button>
+          </div>
+        </div>
+
+        {/* Summary by Region */}
+        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>
+          {regions.map(r=>{
+            const cnt=preview.filter(s=>s.region===r).length;
+            return(<span key={r} style={{padding:'4px 12px',borderRadius:20,background:'#1e293b',color:'#fff',fontSize:12,fontWeight:600}}>
+              {r}: {cnt} sites
+            </span>);
+          })}
+        </div>
+
+        {/* Table preview */}
+        <div style={{overflowX:'auto',borderRadius:10,border:'1px solid #e5e7eb'}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+            <thead>
+              <tr style={{background:'#f8fafc'}}>
+                {['Region','AS Code','Site','REF Sell','REF Target','WM Sell','WM Target','AC Sell','AC Target','Status'].map(h=>(
+                  <th key={h} style={{padding:'8px 12px',textAlign:'left',fontWeight:700,color:'#6b7280',borderBottom:'1px solid #e5e7eb',whiteSpace:'nowrap',fontSize:11}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {preview.slice(0,15).map((row,i)=>(
+                <tr key={i} style={{borderBottom:'1px solid #f1f5f9'}}>
+                  <td style={{padding:'8px 12px',color:'#6b7280'}}>{row.region}</td>
+                  <td style={{padding:'8px 12px',color:'#6b7280'}}>{row.as_code}</td>
+                  <td style={{padding:'8px 12px',fontWeight:600,color:'#111',maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{row.site}</td>
+                  <td style={{padding:'8px 12px',color:'#3b82f6',fontWeight:600}}>{fmtB(row.REF.sell)}</td>
+                  <td style={{padding:'8px 12px',color:'#6b7280'}}>{fmtB(row.REF.target)}</td>
+                  <td style={{padding:'8px 12px',color:'#8b5cf6',fontWeight:600}}>{fmtB(row.WM.sell)}</td>
+                  <td style={{padding:'8px 12px',color:'#6b7280'}}>{fmtB(row.WM.target)}</td>
+                  <td style={{padding:'8px 12px',color:'#f59e0b',fontWeight:600}}>{fmtB(row.AC.sell)}</td>
+                  <td style={{padding:'8px 12px',color:'#6b7280'}}>{fmtB(row.AC.target)}</td>
+                  <td style={{padding:'8px 12px'}}>
+                    <span style={{padding:'2px 8px',borderRadius:12,background:row.pc_status==='WORKING'?'#dcfce7':'#fef3c7',color:row.pc_status==='WORKING'?'#16a34a':'#d97706',fontSize:10,fontWeight:700}}>
+                      {row.pc_status||'-'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {preview.length>15&&(
+            <div style={{padding:'10px 14px',textAlign:'center',color:'#9ca3af',fontSize:12,background:'#f8fafc'}}>
+              ...และอีก {preview.length-15} สาขา
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+  </div>);
+}
+
+// ============================================================
 // APP
 // ============================================================
 function App(){
   const [page,setPage]=useState('survey');
   const [feedbacks,setFeedbacks]=useState([]);
   const [sheetsUrl,setSheetsUrl]=useState('');
+  const [liveSales,setLiveSales]=useState(null); // null = ใช้ MASTER_SITES
   const [loading,setLoading]=useState(true);
 
   useEffect(()=>{
     const fd=storage.get('wss_feedbacks_v2');
     const su=storage.get('wss_sheets_url');
+    const ls=storage.get('wss_live_sales');
     if(fd)setFeedbacks(JSON.parse(fd.value));
     if(su)setSheetsUrl(JSON.parse(su.value));
+    if(ls)setLiveSales(JSON.parse(ls.value));
     setLoading(false);
+  },[]);
+
+  // ข้อมูลยอดขายที่ใช้จริง: liveSales ถ้ามี หรือ MASTER_SITES
+  const activeSites=liveSales||MASTER_SITES;
+
+  const handleUpdateSales=useCallback((newSites)=>{
+    setLiveSales(newSites);
+    storage.set('wss_live_sales',JSON.stringify(newSites));
   },[]);
 
   const SHEETS_URL='https://script.google.com/macros/s/AKfycbydPEC6UO0GVdl55KzuDokEFC5WGRBVaQhHSpdrj6N6dDzAFR5ZajwC6qYaN5aaYTXA/exec';
@@ -505,11 +750,12 @@ function App(){
     storage.set('wss_sheets_url',JSON.stringify(url));
   },[]);
 
-  const pending=MASTER_SITES.filter(s=>!feedbacks.some(f=>f.site===s.site&&f.week===THIS_WEEK)).length;
+  const pending=activeSites.filter(s=>!feedbacks.some(f=>f.site===s.site&&f.week===THIS_WEEK)).length;
   const navItems=[
     {id:'survey',label:'Survey',icon:'📋'},
     {id:'dashboard',label:'Dashboard',icon:'📊'},
     {id:'history',label:'ประวัติ',icon:'🕐'},
+    {id:'admin',label:'Admin',icon:'📤',dot:false},
     {id:'setup',label:'Setup Sheets',icon:'⚙️',dot:!sheetsUrl},
   ];
 
@@ -531,7 +777,8 @@ function App(){
             <div style={{fontSize:10,color:'#475569',marginTop:1}}>{THIS_WEEK}</div>
           </div>
           <div style={{fontSize:11,color:'#475569',background:'rgba(255,255,255,.07)',padding:'3px 10px',borderRadius:20}}>
-            {MASTER_SITES.length} sites · 5 regions
+            {activeSites.length} sites · 5 regions
+            {liveSales&&<span style={{marginLeft:6,color:'#4ade80',fontWeight:700}}>· LIVE</span>}
           </div>
           <div style={{marginLeft:'auto',display:'flex',gap:3}}>
             {navItems.map(n=>(
@@ -546,15 +793,16 @@ function App(){
       </div>
 
       <div style={{maxWidth:1100,margin:'0 auto',padding:'24px 20px'}}>
-        {pending>0&&page!=='setup'&&(
+        {pending>0&&page!=='setup'&&page!=='admin'&&(
           <div style={{padding:'11px 16px',borderRadius:12,background:'#fffbeb',border:'1px solid #fbbf24',color:'#92400e',fontSize:13,fontWeight:500,marginBottom:18}}>
             ⚠️ ยังมี <strong>{pending} สาขา</strong> ที่ยังไม่ได้ส่ง Feedback สัปดาห์นี้
             {!sheetsUrl&&<span style={{marginLeft:12,color:'#d97706'}}>· Google Sheets ยังไม่ได้เชื่อมต่อ</span>}
           </div>
         )}
-        {page==='survey'&&<SurveyPage feedbacks={feedbacks} onSubmit={handleSubmit} sheetsUrl={sheetsUrl}/>}
-        {page==='dashboard'&&<DashboardPage feedbacks={feedbacks}/>}
-        {page==='history'&&<HistoryPage feedbacks={feedbacks}/>}
+        {page==='survey'&&<SurveyPage feedbacks={feedbacks} onSubmit={handleSubmit} sheetsUrl={sheetsUrl} activeSites={activeSites}/>}
+        {page==='dashboard'&&<DashboardPage feedbacks={feedbacks} activeSites={activeSites}/>}
+        {page==='history'&&<HistoryPage feedbacks={feedbacks} activeSites={activeSites}/>}
+        {page==='admin'&&<AdminPage onUpdateSales={handleUpdateSales}/>}
         {page==='setup'&&<SetupPage sheetsUrl={sheetsUrl} onSaveUrl={handleSaveUrl}/>}
       </div>
     </div>
