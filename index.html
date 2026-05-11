@@ -816,7 +816,7 @@ function App(){
   const [loading,setLoading]=useState(true);
   const [unlocked,setUnlocked]=useState(false);
 
-  const SHEETS_URL='https://script.google.com/macros/s/AKfycby9AP4oy3BnHxS87qPci7lUIoEvbrlaUOSySfk0MzB11brfCU5_n7gtU93hsMZv9pw/exec';
+  const SHEETS_URL='https://script.google.com/macros/s/AKfycbzXUClH7O4elWsU47aGWm3cjpxEfI27jgf0OFqAL2Dn8TQwQv11fdvcLsrWAD7pO8tB/exec';
 
   // โหลด feedbacks จาก localStorage + ดึง sales จาก Sheets ทุกครั้งที่เปิดเว็บ
   useEffect(()=>{
@@ -843,12 +843,12 @@ function App(){
   const handleUpdateSales=useCallback((newSites)=>{
     setLiveSales(newSites);
     storage.set('wss_live_sales',JSON.stringify(newSites));
-    // sync ขึ้น Sheets ให้ทุกอุปกรณ์เห็น
-    fetch(SHEETS_URL,{
-      method:'POST',
-      body:JSON.stringify({action:'updateSales',sites:newSites,updatedAt:new Date().toISOString()}),
-      headers:{'Content-Type':'application/json'},
-    }).catch(e=>console.warn('Sync sales failed:',e));
+    // ส่งผ่าน GET แก้ปัญหา CORS จาก GitHub Pages
+    try{
+      const payload={action:'updateSales',sites:newSites,updatedAt:new Date().toISOString()};
+      const encoded=encodeURIComponent(JSON.stringify(payload));
+      fetch(`${SHEETS_URL}?data=${encoded}`,{method:'GET',mode:'no-cors'});
+    }catch(e){console.warn('Sync sales failed:',e);}
   },[]);
 
   const handleSubmit=useCallback(async(fb)=>{
