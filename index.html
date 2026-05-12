@@ -810,6 +810,285 @@ function AdminPage({onUpdateSales}){
 }
 
 // ============================================================
+// PERFORMANCE PAGE
+// ============================================================
+function PerformancePage({feedbacks,activeSites}){
+  // Time Gone คำนวณอัตโนมัติจากวันปัจจุบัน
+  const today=new Date();
+  const dayOfMonth=today.getDate();
+  const daysInMonth=new Date(today.getFullYear(),today.getMonth()+1,0).getDate();
+  const timeGonePct=Math.round((dayOfMonth/daysInMonth)*100);
+  const monthName=today.toLocaleDateString('th-TH',{month:'long',year:'numeric'});
+
+  const [region,setRegion]=useState('ALL');
+  const [asCode,setAsCode]=useState('ALL');
+
+  const regions=[...new Set(activeSites.map(s=>s.region))].sort();
+  const availableAS=[...new Set(
+    (region==='ALL'?activeSites:activeSites.filter(s=>s.region===region)).map(s=>s.as_code)
+  )].sort();
+
+  // reset AS เมื่อเปลี่ยน Region
+  const handleRegionChange=e=>{setRegion(e.target.value);setAsCode('ALL');};
+
+  const filteredSites=activeSites.filter(s=>
+    (region==='ALL'||s.region===region)&&
+    (asCode==='ALL'||s.as_code===asCode)
+  );
+
+  // Summary totals
+  const totalSell=CAT=>filteredSites.reduce((s,x)=>s+(x[CAT]?.sell||0),0);
+  const totalTarget=CAT=>filteredSites.reduce((s,x)=>s+(x[CAT]?.target||0),0);
+  const grandSell=totalSell('REF')+totalSell('WM')+totalSell('AC');
+  const grandTarget=totalTarget('REF')+totalTarget('WM')+totalTarget('AC');
+  const grandAch=grandTarget?Math.round((grandSell/grandTarget)*100):0;
+
+  // Account groups
+  const accounts=[...new Set(filteredSites.map(s=>s.account||'Unknown'))].sort();
+  const ACCT_COLORS={
+    'Lotus':{bg:'#E6F1FB',color:'#185FA5'},
+    'BigC':{bg:'#EEEDFE',color:'#534AB7'},
+    'Makro':{bg:'#E1F5EE',color:'#0F6E56'},
+  };
+  const getAcctColor=a=>ACCT_COLORS[a]||{bg:'#F1EFE8',color:'#5F5E5A'};
+
+  // Feedback status
+  const fbMap={};
+  feedbacks.filter(f=>f.week===THIS_WEEK).forEach(f=>{fbMap[f.site]=f;});
+  const submitted=filteredSites.filter(s=>fbMap[s.site]).length;
+  const belowTarget=filteredSites.filter(s=>{
+    const refA=achPct(s.REF?.sell,s.REF?.target);
+    const wmA=achPct(s.WM?.sell,s.WM?.target);
+    const acA=achPct(s.AC?.sell,s.AC?.target);
+    return Math.min(refA,wmA,acA)<80;
+  }).length;
+
+  // Sorted branch list
+  const sortedSites=[...filteredSites].sort((a,b)=>{
+    const avgA=(achPct(a.REF?.sell,a.REF?.target)+achPct(a.WM?.sell,a.WM?.target)+achPct(a.AC?.sell,a.AC?.target))/3;
+    const avgB=(achPct(b.REF?.sell,b.REF?.target)+achPct(b.WM?.sell,b.WM?.target)+achPct(b.AC?.sell,b.AC?.target))/3;
+    return avgA-avgB;
+  });
+
+  function achColor(p){
+    if(p>=100)return{bg:'#EAF3DE',color:'#3B6D11'};
+    if(p>=80)return{bg:'#FAEEDA',color:'#854F0B'};
+    return{bg:'#FCEBEB',color:'#A32D2D'};
+  }
+  function barColor(p){
+    if(p>=100)return'#3B6D11';
+    if(p>=80)return'#BA7517';
+    return'#E24B4A';
+  }
+
+  return(
+    <div style={{maxWidth:1100,margin:'0 auto'}}>
+      {/* Header + Filters */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,flexWrap:'wrap',gap:12}}>
+        <div>
+          <div style={{fontWeight:700,fontSize:18,color:'#111'}}>My Performance</div>
+          <div style={{fontSize:12,color:'#6b7280',marginTop:2}}>{THIS_WEEK}</div>
+        </div>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+          <select value={region} onChange={handleRegionChange} style={{...sel,width:'auto',padding:'9px 14px'}}>
+            <option value='ALL'>ทุก Region</option>
+            {regions.map(r=><option key={r}>{r}</option>)}
+          </select>
+          <select value={asCode} onChange={e=>setAsCode(e.target.value)} style={{...sel,width:'auto',padding:'9px 14px'}}>
+            <option value='ALL'>ทุก AS Code</option>
+            {availableAS.map(a=><option key={a}>{a}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Time Gone Banner */}
+      <div style={{...card,padding:'14px 20px',marginBottom:16}}>
+        <div style={{display:'flex',alignItems:'center',gap:20,flexWrap:'wrap'}}>
+          <div style={{flex:1,minWidth:220}}>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
+              <span style={{fontSize:13,color:'#6b7280'}}>Time Gone — {monthName}</span>
+              <span style={{fontSize:15,fontWeight:700,color:'#111'}}>{timeGonePct}%</span>
+            </div>
+            <div style={{height:8,borderRadius:4,background:'#e5e7eb',overflow:'hidden'}}>
+              <div style={{height:'100%',width:`${timeGonePct}%`,background:'#378ADD',borderRadius:4,transition:'width 1s ease'}}/>
+            </div>
+            <div style={{display:'flex',justifyContent:'space-between',marginTop:4,fontSize:11,color:'#9ca3af'}}>
+              <span>วันที่ {dayOfMonth} จาก {daysInMonth} วัน</span>
+              <span>เหลืออีก {daysInMonth-dayOfMonth} วัน</span>
+            </div>
+          </div>
+          <div style={{display:'flex',gap:20}}>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontSize:20,fontWeight:700,color:'#111'}}>{filteredSites.length}</div>
+              <div style={{fontSize:11,color:'#6b7280'}}>สาขาทั้งหมด</div>
+            </div>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontSize:20,fontWeight:700,color:'#dc2626'}}>{belowTarget}</div>
+              <div style={{fontSize:11,color:'#6b7280'}}>ต่ำกว่าเป้า</div>
+            </div>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontSize:20,fontWeight:700,color:'#16a34a'}}>{submitted}/{filteredSites.length}</div>
+              <div style={{fontSize:11,color:'#6b7280'}}>Feedback</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Grand Total */}
+      <div style={{...card,padding:'16px 20px',marginBottom:12,background:'#0f172a',color:'#fff'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:12}}>
+          <div>
+            <div style={{fontSize:12,opacity:.6,marginBottom:4,letterSpacing:'.05em',textTransform:'uppercase'}}>ยอดขายรวมทุกห้าง (REF+WM+AC)</div>
+            <div style={{fontSize:28,fontWeight:800,letterSpacing:'-.02em'}}>{fmtB(grandSell)}</div>
+          </div>
+          <div style={{display:'flex',gap:24,flexWrap:'wrap'}}>
+            <div style={{textAlign:'right'}}>
+              <div style={{fontSize:11,opacity:.5,marginBottom:2}}>เป้ารวม</div>
+              <div style={{fontSize:18,fontWeight:700}}>{fmtB(grandTarget)}</div>
+            </div>
+            <div style={{textAlign:'right'}}>
+              <div style={{fontSize:11,opacity:.5,marginBottom:2}}>Ach% รวม</div>
+              <div style={{fontSize:18,fontWeight:700,color:grandAch>=100?'#4ade80':grandAch>=80?'#fbbf24':'#f87171'}}>{grandAch}%</div>
+            </div>
+            <div style={{textAlign:'right'}}>
+              <div style={{fontSize:11,opacity:.5,marginBottom:2}}>Time Gone</div>
+              <div style={{fontSize:18,fontWeight:700,color:'#60a5fa'}}>{timeGonePct}%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Category Cards */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:16}}>
+        {CATS.map(cat=>{
+          const sell=totalSell(cat);
+          const target=totalTarget(cat);
+          const ap=achPct(sell,target);
+          return(
+            <div key={cat} style={{...card,padding:'14px 16px',borderLeft:`3px solid ${CAT_COLORS[cat]}`}}>
+              <div style={{fontSize:12,color:'#6b7280',marginBottom:4,fontWeight:600}}>{cat} — {CAT_LABELS[cat]}</div>
+              <div style={{fontSize:20,fontWeight:700,color:'#111'}}>{fmtB(sell)}</div>
+              <div style={{fontSize:11,color:'#9ca3af',marginTop:2}}>เป้า {fmtB(target)}</div>
+              <div style={{height:4,borderRadius:2,background:'#e5e7eb',marginTop:8,overflow:'hidden'}}>
+                <div style={{height:'100%',width:`${Math.min(ap,100)}%`,background:barColor(ap),borderRadius:2}}/>
+              </div>
+              <div style={{display:'flex',justifyContent:'space-between',marginTop:4}}>
+                <span style={{fontSize:11,fontWeight:700,color:barColor(ap)}}>{ap}%</span>
+                <span style={{fontSize:11,color:'#9ca3af'}}>vs {timeGonePct}% time</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Account Overview Chart */}
+      <div style={{...card,marginBottom:16}}>
+        <div style={{fontSize:14,fontWeight:700,color:'#111',marginBottom:4}}>ภาพรวม Ach% แยกตาม Account & Category</div>
+        <div style={{fontSize:12,color:'#6b7280',marginBottom:16}}>เส้นประแดง = Time Gone {timeGonePct}%</div>
+        <div style={{display:'flex',gap:12,marginBottom:16,flexWrap:'wrap'}}>
+          {CATS.map(c=>(
+            <span key={c} style={{display:'flex',alignItems:'center',gap:5,fontSize:12,color:'#6b7280'}}>
+              <span style={{width:10,height:10,borderRadius:2,background:CAT_COLORS[c],display:'inline-block'}}/>
+              {c}
+            </span>
+          ))}
+          <span style={{display:'flex',alignItems:'center',gap:5,fontSize:12,color:'#dc2626',marginLeft:8}}>
+            <span style={{width:16,borderTop:'2px dashed #dc2626',display:'inline-block'}}/>
+            Time Gone {timeGonePct}%
+          </span>
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:20}}>
+          {accounts.map(acct=>{
+            const acctSites=filteredSites.filter(s=>(s.account||'Unknown')===acct);
+            if(acctSites.length===0)return null;
+            const {bg,color}=getAcctColor(acct);
+            return(
+              <div key={acct}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+                  <span style={{padding:'3px 12px',borderRadius:20,background:bg,color,fontSize:12,fontWeight:700}}>{acct}</span>
+                  <span style={{fontSize:11,color:'#9ca3af'}}>{acctSites.length} สาขา</span>
+                </div>
+                <div style={{position:'relative'}}>
+                  <div style={{position:'absolute',left:`${timeGonePct}%`,top:0,bottom:0,borderLeft:'2px dashed #ef4444',zIndex:1,pointerEvents:'none'}}/>
+                  <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                    {CATS.map(cat=>{
+                      const sell=acctSites.reduce((s,x)=>s+(x[cat]?.sell||0),0);
+                      const target=acctSites.reduce((s,x)=>s+(x[cat]?.target||0),0);
+                      const ap=achPct(sell,target);
+                      return(
+                        <div key={cat} style={{display:'flex',alignItems:'center',gap:10}}>
+                          <span style={{fontSize:11,color:'#6b7280',width:28,fontWeight:600}}>{cat}</span>
+                          <div style={{flex:1,height:16,borderRadius:3,background:'#f1f5f9',overflow:'hidden',position:'relative'}}>
+                            <div style={{height:'100%',width:`${Math.min(ap,100)}%`,background:CAT_COLORS[cat],borderRadius:3,opacity:.85}}/>
+                          </div>
+                          <span style={{fontSize:11,fontWeight:700,width:38,textAlign:'right',color:barColor(ap)}}>{ap}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Branch Table */}
+      <div style={{...card,padding:0,overflow:'hidden'}}>
+        <div style={{padding:'14px 18px',borderBottom:'1px solid #f1f5f9'}}>
+          <div style={{fontSize:14,fontWeight:700,color:'#111'}}>รายละเอียดแต่ละสาขา — เรียงจาก Ach% ต่ำสุด</div>
+        </div>
+        <div style={{overflowX:'auto'}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12,tableLayout:'fixed'}}>
+            <thead>
+              <tr style={{background:'#f8fafc',borderBottom:'1px solid #e5e7eb'}}>
+                <th style={{padding:'10px 14px',textAlign:'left',fontWeight:700,color:'#6b7280',fontSize:11,letterSpacing:'.04em',textTransform:'uppercase',width:'30%'}}>สาขา</th>
+                <th style={{padding:'10px 14px',textAlign:'left',fontWeight:700,color:'#6b7280',fontSize:11,width:'12%'}}>Account</th>
+                <th style={{padding:'10px 14px',textAlign:'right',fontWeight:700,color:'#6b7280',fontSize:11}}>REF%</th>
+                <th style={{padding:'10px 14px',textAlign:'right',fontWeight:700,color:'#6b7280',fontSize:11}}>WM%</th>
+                <th style={{padding:'10px 14px',textAlign:'right',fontWeight:700,color:'#6b7280',fontSize:11}}>AC%</th>
+                <th style={{padding:'10px 14px',textAlign:'center',fontWeight:700,color:'#6b7280',fontSize:11}}>Feedback</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedSites.map((s,i)=>{
+                const refA=achPct(s.REF?.sell,s.REF?.target);
+                const wmA=achPct(s.WM?.sell,s.WM?.target);
+                const acA=achPct(s.AC?.sell,s.AC?.target);
+                const fb=fbMap[s.site];
+                const {bg:aBg,color:aColor}=getAcctColor(s.account||'Unknown');
+                return(
+                  <tr key={s.site} style={{borderBottom:i<sortedSites.length-1?'1px solid #f1f5f9':'none'}}
+                    onMouseEnter={e=>e.currentTarget.style.background='#f8fafc'}
+                    onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                    <td style={{padding:'10px 14px',fontWeight:600,color:'#111',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.site}</td>
+                    <td style={{padding:'10px 14px'}}>
+                      <span style={{padding:'2px 8px',borderRadius:8,background:aBg,color:aColor,fontSize:11,fontWeight:700}}>{s.account||'-'}</span>
+                    </td>
+                    {[refA,wmA,acA].map((ap,j)=>{
+                      const {bg,color}=achColor(ap);
+                      return <td key={j} style={{padding:'10px 14px',textAlign:'right'}}>
+                        <span style={{padding:'2px 8px',borderRadius:6,background:bg,color,fontWeight:700}}>{ap}%</span>
+                      </td>;
+                    })}
+                    <td style={{padding:'10px 14px',textAlign:'center'}}>
+                      {fb
+                        ?<span style={{padding:'3px 10px',borderRadius:20,background:'#dcfce7',color:'#16a34a',fontSize:11,fontWeight:700}}>✓ ส่งแล้ว</span>
+                        :<span style={{padding:'3px 10px',borderRadius:20,background:'#fef3c7',color:'#d97706',fontSize:11,fontWeight:700}}>รอ</span>
+                      }
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
 // APP
 // ============================================================
 function App(){
@@ -895,9 +1174,10 @@ function App(){
   const navItems=[
     {id:'survey',label:'Survey',icon:'📋'},
     {id:'dashboard',label:'Dashboard',icon:'📊'},
+    {id:'performance',label:'Performance',icon:'📈'},
     {id:'history',label:'ประวัติ',icon:'🕐'},
     {id:'admin',label:'Admin',icon:'📤',lock:true},
-    {id:'setup',label:'Setup Sheets',icon:'⚙️',lock:true,dot:!sheetsUrl},
+    {id:'setup',label:'Setup Sheets',icon:'⚙️',lock:true,dot:false},
   ];
 
   if(loading)return(
@@ -938,11 +1218,11 @@ function App(){
         {pending>0&&page!=='setup'&&page!=='admin'&&(
           <div style={{padding:'11px 16px',borderRadius:12,background:'#fffbeb',border:'1px solid #fbbf24',color:'#92400e',fontSize:13,fontWeight:500,marginBottom:18}}>
             ⚠️ ยังมี <strong>{pending} สาขา</strong> ที่ยังไม่ได้ส่ง Feedback สัปดาห์นี้
-            {!sheetsUrl&&<span style={{marginLeft:12,color:'#d97706'}}>· Google Sheets ยังไม่ได้เชื่อมต่อ</span>}
           </div>
         )}
         {page==='survey'&&<SurveyPage feedbacks={feedbacks} onSubmit={handleSubmit} sheetsUrl={sheetsUrl} activeSites={activeSites}/>}
         {page==='dashboard'&&<DashboardPage feedbacks={feedbacks} activeSites={activeSites}/>}
+        {page==='performance'&&<PerformancePage feedbacks={feedbacks} activeSites={activeSites}/>}
         {page==='history'&&<HistoryPage feedbacks={feedbacks} activeSites={activeSites}/>}
         {page==='admin'&&(!unlocked
           ?<PasscodeLock title='Admin — อัพโหลดยอดขาย' onUnlock={()=>setUnlocked(true)}/>
