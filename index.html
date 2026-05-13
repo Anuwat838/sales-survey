@@ -1081,14 +1081,9 @@ function PerformancePage({feedbacks,activeSites}){
                                 <span style={{fontSize:9,fontWeight:700,color:CAT_TEXT[cat],writingMode:'vertical-rl',transform:'rotate(180deg)',letterSpacing:1}}>{cat}</span>
                               </div>
                               <div style={{flex:1,padding:'7px 9px',background:'#fff'}}>
-                                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:2}}>
-                                  <span style={{fontSize:12,fontWeight:700,color:'#111'}}>{fmtB(sell)}</span>
-                                  <span style={{padding:'1px 5px',borderRadius:4,background:achColor(ap).bg,color:achColor(ap).color,fontSize:10,fontWeight:700}}>{ap}%</span>
-                                </div>
+                                <div style={{fontSize:12,fontWeight:700,color:'#111',marginBottom:2}}>{fmtB(sell)}</div>
                                 <div style={{fontSize:10,color:'#9ca3af',marginBottom:5}}>/ {fmtB(target)}</div>
-                                <div style={{height:3,borderRadius:2,background:'#e5e7eb',overflow:'hidden'}}>
-                                  <div style={{height:'100%',width:`${Math.min(ap,100)}%`,background:barColor(ap),borderRadius:2}}/>
-                                </div>
+                                <span style={{padding:'2px 8px',borderRadius:4,background:achColor(ap).bg,color:achColor(ap).color,fontSize:11,fontWeight:700}}>{ap}%</span>
                               </div>
                             </div>
                           ))}
