@@ -245,126 +245,272 @@ function SurveyPage({feedbacks,onSubmit,sheetsUrl,activeSites}){
 function DashboardPage({feedbacks,activeSites}){
   const [rf,setRf]=useState('ALL');
   const [af,setAf]=useState('ALL');
-  const [ac,setAc]=useState('ALL'); // account filter
-  const [cv,setCv]=useState('REF');
-  const [sb,setSb]=useState('ach_asc'); // default: ach% ต่ำสุดขึ้นก่อน
+  const [ac,setAc]=useState('ALL');
 
   const regions=[...new Set(activeSites.map(s=>s.region))].sort();
-
-  // Account list ขึ้นกับ Region ที่เลือก
-  const availableAccounts=[...new Set(
-    (rf==='ALL'?activeSites:activeSites.filter(s=>s.region===rf))
-    .map(s=>s.account||'Unknown').filter(Boolean)
-  )].sort();
-
-  // AS Codes ขึ้นกับ Region + Account ที่เลือก
-  const availableAS=[...new Set(
-    activeSites.filter(s=>
-      (rf==='ALL'||s.region===rf)&&
-      (ac==='ALL'||s.account===ac)
-    ).map(s=>s.as_code)
-  )].sort();
+  const availableAccounts=[...new Set((rf==='ALL'?activeSites:activeSites.filter(s=>s.region===rf)).map(s=>s.account||'Unknown').filter(Boolean))].sort();
+  const availableAS=[...new Set(activeSites.filter(s=>(rf==='ALL'||s.region===rf)&&(ac==='ALL'||s.account===ac)).map(s=>s.as_code))].sort();
 
   const handleRegionChange=e=>{setRf(e.target.value);setAf('ALL');setAc('ALL');};
   const handleAccountChange=e=>{setAc(e.target.value);setAf('ALL');};
 
-  const sites=activeSites.filter(s=>
-    (rf==='ALL'||s.region===rf)&&
-    (ac==='ALL'||s.account===ac)&&
-    (af==='ALL'||s.as_code===af)
-  );
-  const fbMap={};
-  feedbacks.filter(f=>f.week===THIS_WEEK).forEach(f=>{fbMap[f.site]=f;});
-  const rows=sites.map(s=>({...s,fb:fbMap[s.site]||null,submitted:!!fbMap[s.site]}));
-  const sorted=[...rows].sort((a,b)=>{
-    if(sb==='ach_asc') return achPct(a[cv].sell,a[cv].target)-achPct(b[cv].sell,b[cv].target);
-    if(sb==='ach_desc') return achPct(b[cv].sell,b[cv].target)-achPct(a[cv].sell,a[cv].target);
-    if(sb==='sell') return b[cv].sell-a[cv].sell;
-    return 0;
-  });
-  const ts=sites.reduce((s,x)=>s+x[cv].sell,0);
-  const tt=sites.reduce((s,x)=>s+x[cv].target,0);
-  const sub=rows.filter(r=>r.submitted).length;
+  const sites=activeSites.filter(s=>(rf==='ALL'||s.region===rf)&&(ac==='ALL'||s.account===ac)&&(af==='ALL'||s.as_code===af));
+
+  // Summary totals
+  const tSell=cat=>sites.reduce((s,x)=>s+(x[cat]?.sell||0),0);
+  const tTarget=cat=>sites.reduce((s,x)=>s+(x[cat]?.target||0),0);
+  const grandGap=(tSell('REF')+tSell('WM')+tSell('AC'))-(tTarget('REF')+tTarget('WM')+tTarget('AC'));
+
+  // Heat Map — by Region
+  const allRegions=[...new Set(sites.map(s=>s.region))].sort();
+  const regionStats=r=>{
+    const rs=sites.filter(s=>r==='ALL'||s.region===r);
+    return CATS.map(cat=>({
+      cat,
+      sell:rs.reduce((s,x)=>s+(x[cat]?.sell||0),0),
+      target:rs.reduce((s,x)=>s+(x[cat]?.target||0),0),
+    }));
+  };
+
+  // Gap by region
+  const regionGap=r=>{
+    const rs=sites.filter(s=>s.region===r);
+    return CATS.reduce((o,cat)=>{
+      o[cat]=(rs.reduce((s,x)=>s+(x[cat]?.sell||0),0))-(rs.reduce((s,x)=>s+(x[cat]?.target||0),0));
+      return o;
+    },{});
+  };
+  const maxAbsGap=Math.max(...allRegions.map(r=>{const g=regionGap(r);return Math.max(...CATS.map(c=>Math.abs(g[c]||0)));}),1);
+
+  // Bottom 10 / Top 10 — avg ach% across all cats
+  const avgAch=s=>(achPct(s.REF?.sell,s.REF?.target)+achPct(s.WM?.sell,s.WM?.target)+achPct(s.AC?.sell,s.AC?.target))/3;
+  const sorted=[...sites].sort((a,b)=>avgAch(a)-avgAch(b));
+  const bottom10=sorted.slice(0,10);
+  const top10=[...sorted].reverse().slice(0,10);
+
+  function achBadge(ap){
+    if(ap>=100)return{bg:'#EAF3DE',color:'#3B6D11'};
+    if(ap>=80)return{bg:'#FAEEDA',color:'#854F0B'};
+    return{bg:'#FCEBEB',color:'#A32D2D'};
+  }
+  function gapColor(v){return v>=0?'#3B6D11':v>=-1000000?'#854F0B':'#A32D2D';}
+  function fmtGap(v){return(v>=0?'+':'')+fmtB(v);}
+  function fmtM(v){return'฿'+(v/1000000).toFixed(2)+'M';}
+
+  const thStyle={padding:'5px 8px',textAlign:'right',color:'#6b7280',fontWeight:500,fontSize:11};
+  const tdStyle={padding:'6px 8px',textAlign:'right',color:'#6b7280',fontSize:12};
+  const blStyle={borderLeft:'0.5px solid #e5e7eb'};
 
   return(<div>
-    <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:20}}>
-      {[{l:'ยอดรวม '+cv,v:fmtB(ts),s:`${achPct(ts,tt)}% ของเป้า`,c:CAT_COLORS[cv]},
-        {l:'เป้ารวม '+cv,v:fmtB(tt),s:`${sites.length} สาขา`,c:'#6b7280'},
-        {l:'ส่ง Feedback',v:`${sub}/${rows.length}`,s:`${Math.round(sub/rows.length*100)}%`,c:sub===rows.length?'#16a34a':'#f59e0b'},
-        {l:'ยังไม่ส่ง',v:rows.length-sub,s:'สาขา',c:rows.length-sub>0?'#ef4444':'#16a34a'}
-      ].map(x=>(
-        <div key={x.l} style={{...card,borderTop:`4px solid ${x.c}`,padding:'18px 20px'}}>
-          <div style={{fontSize:11,color:'#6b7280',fontWeight:700,letterSpacing:'.05em',textTransform:'uppercase',marginBottom:6}}>{x.l}</div>
-          <div style={{fontSize:22,fontWeight:800,color:x.c}}>{x.v}</div>
-          <div style={{fontSize:12,color:'#9ca3af',marginTop:3}}>{x.s}</div>
-        </div>
-      ))}
-    </div>
-
-    <div style={{display:'flex',gap:10,marginBottom:14,flexWrap:'wrap',alignItems:'center'}}>
-      <select value={rf} onChange={handleRegionChange} style={{...sel,width:'auto',padding:'9px 14px'}}>
-        <option value='ALL'>ทุก Region</option>
-        {regions.map(r=><option key={r}>{r}</option>)}
-      </select>
-      <select value={ac} onChange={handleAccountChange} style={{...sel,width:'auto',padding:'9px 14px'}}>
-        <option value='ALL'>ทุก Account</option>
-        {availableAccounts.map(a=><option key={a}>{a}</option>)}
-      </select>
-      <select value={af} onChange={e=>setAf(e.target.value)} style={{...sel,width:'auto',padding:'9px 14px'}}>
-        <option value='ALL'>ทุก AS Code</option>
-        {availableAS.map(a=><option key={a}>{a}</option>)}
-      </select>
-      <div style={{display:'flex',gap:6}}>
-        {CATS.map(c=>(
-          <button key={c} onClick={()=>setCv(c)}
-            style={{padding:'9px 16px',borderRadius:10,border:`2px solid ${cv===c?CAT_COLORS[c]:'#e5e7eb'}`,background:cv===c?CAT_COLORS[c]+'15':'#fff',color:cv===c?CAT_COLORS[c]:'#6b7280',fontSize:13,fontWeight:700,cursor:'pointer'}}>
-            {c}
-          </button>
-        ))}
+    {/* ① Filters */}
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10,marginBottom:20}}>
+      <div>
+        <div style={{fontSize:11,color:'#6b7280',marginBottom:4}}>Account</div>
+        <select value={ac} onChange={handleAccountChange} style={{...sel}}>
+          <option value='ALL'>ทุก Account</option>
+          {availableAccounts.map(a=><option key={a}>{a}</option>)}
+        </select>
       </div>
-      <div style={{display:'flex',gap:6,marginLeft:'auto'}}>
-        {[['ach_asc','% เป้า ↑ต่ำ'],['ach_desc','% เป้า ↓สูง'],['sell','ยอดขาย']].map(([v,l])=>(
-          <button key={v} onClick={()=>setSb(v)}
-            style={{padding:'9px 14px',borderRadius:10,border:`2px solid ${sb===v?'#1e293b':'#e5e7eb'}`,background:sb===v?'#1e293b':'#fff',color:sb===v?'#fff':'#6b7280',fontSize:13,fontWeight:600,cursor:'pointer'}}>
-            {l}
-          </button>
-        ))}
+      <div>
+        <div style={{fontSize:11,color:'#6b7280',marginBottom:4}}>Region</div>
+        <select value={rf} onChange={handleRegionChange} style={{...sel}}>
+          <option value='ALL'>ทุก Region</option>
+          {regions.map(r=><option key={r}>{r}</option>)}
+        </select>
+      </div>
+      <div>
+        <div style={{fontSize:11,color:'#6b7280',marginBottom:4}}>AS Code</div>
+        <select value={af} onChange={e=>setAf(e.target.value)} style={{...sel}}>
+          <option value='ALL'>ทุก AS Code</option>
+          {availableAS.map(a=><option key={a}>{a}</option>)}
+        </select>
       </div>
     </div>
 
-    <div style={{...card,padding:0,overflow:'hidden'}}>
-      <div style={{display:'grid',gridTemplateColumns:'2fr 1.2fr .8fr .8fr 1fr 70px',padding:'10px 18px',background:'#f8fafc',borderBottom:'1px solid #e5e7eb',fontSize:11,fontWeight:700,color:'#6b7280',letterSpacing:'.05em',textTransform:'uppercase'}}>
-        <div>สาขา / AS</div><div>ยอดขาย {cv}</div><div>% เป้า</div><div>เป้า</div><div>Feedback</div><div style={{textAlign:'center'}}>สถานะ</div>
-      </div>
-      {sorted.map((row,i)=>{
-        const ap=achPct(row[cv].sell,row[cv].target);
-        return(<div key={row.site+i} style={{display:'grid',gridTemplateColumns:'2fr 1.2fr .8fr .8fr 1fr 70px',padding:'13px 18px',borderBottom:i<sorted.length-1?'1px solid #f1f5f9':'none',alignItems:'center'}}
-          onMouseEnter={e=>e.currentTarget.style.background='#f8fafc'}
-          onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-          <div>
-            <div style={{fontWeight:600,fontSize:13,color:'#111'}}>{row.site}</div>
-            <div style={{fontSize:11,color:'#9ca3af',marginTop:2}}>
-              {row.account&&<span style={{padding:'1px 6px',borderRadius:6,background:'#eff6ff',color:'#3b82f6',fontWeight:700,marginRight:5,fontSize:10}}>{row.account}</span>}
-              {row.as_code} · {row.region}
-            </div>
-          </div>
-          <div style={{fontWeight:700,fontSize:14}}>{fmtB(row[cv].sell)}</div>
-          <div>
-            <div style={{fontSize:13,fontWeight:700,color:ap>=100?'#16a34a':ap>=80?'#f59e0b':'#ef4444'}}>{ap}%</div>
-            <div style={{height:3,borderRadius:2,background:'#e5e7eb',marginTop:4,overflow:'hidden'}}>
-              <div style={{height:'100%',width:`${Math.min(ap,100)}%`,background:ap>=100?'#16a34a':ap>=80?'#f59e0b':'#ef4444'}}/>
-            </div>
-          </div>
-          <div style={{fontSize:12,color:'#6b7280'}}>{fmtB(row[cv].target)}</div>
-          <div style={{fontSize:12,color:'#6b7280'}}>{row.fb?<><div style={{fontWeight:600,color:'#111',fontSize:12}}>{row.fb.submitterName}</div></>:'-'}</div>
-          <div style={{textAlign:'center'}}>
-            <span style={{display:'inline-flex',alignItems:'center',gap:3,padding:'3px 8px',borderRadius:20,fontSize:11,fontWeight:700,background:row.submitted?'#dcfce7':'#fef3c7',color:row.submitted?'#16a34a':'#d97706'}}>
-              {row.submitted?'✓ ส่ง':'รอ'}
-            </span>
-          </div>
+    {/* ② Summary Cards */}
+    <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:14}}>
+      {CATS.map(cat=>{
+        const sell=tSell(cat);const target=tTarget(cat);const ap=achPct(sell,target);
+        return(<div key={cat} style={{background:'#f8fafc',borderRadius:12,padding:'14px 16px',borderTop:`3px solid ${CAT_COLORS[cat]}`}}>
+          <div style={{fontSize:11,color:'#6b7280',marginBottom:4,letterSpacing:'.04em',textTransform:'uppercase'}}>{cat} รวม</div>
+          <div style={{fontSize:20,fontWeight:700,color:'#111'}}>{fmtM(sell)}</div>
+          <div style={{fontSize:12,color:'#6b7280',marginTop:3}}>เป้า {fmtM(target)} · <span style={{fontWeight:700,color:ap>=100?'#3B6D11':ap>=80?'#854F0B':'#A32D2D'}}>{ap}%</span></div>
         </div>);
       })}
+      <div style={{background:'#f8fafc',borderRadius:12,padding:'14px 16px',borderTop:'3px solid #E24B4A'}}>
+        <div style={{fontSize:11,color:'#6b7280',marginBottom:4,letterSpacing:'.04em',textTransform:'uppercase'}}>Gap to Target</div>
+        <div style={{fontSize:20,fontWeight:700,color:'#A32D2D'}}>{fmtM(grandGap)}</div>
+        <div style={{fontSize:12,color:'#6b7280',marginTop:3}}>ต้องขายเพิ่มรวม</div>
+      </div>
     </div>
+
+    {/* ③ Heat Map */}
+    <div style={{...card,marginBottom:14}}>
+      <div style={{fontSize:14,fontWeight:700,color:'#111',marginBottom:3}}>Heat Map — Ach% by Region × Category</div>
+      <div style={{fontSize:11,color:'#6b7280',marginBottom:14}}>แสดง Sell / Target / Ach% ต่อ Region</div>
+      <div style={{overflowX:'auto'}}>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+          <thead>
+            <tr style={{borderBottom:'0.5px solid #e5e7eb'}}>
+              <th style={{...thStyle,textAlign:'left',width:'13%'}}>Region</th>
+              {CATS.map(cat=>(
+                <th key={cat} colSpan={3} style={{...thStyle,textAlign:'center',color:cat==='REF'?'#185FA5':cat==='WM'?'#534AB7':'#0F6E56',...blStyle}}>{cat}</th>
+              ))}
+            </tr>
+            <tr style={{borderBottom:'0.5px solid #e5e7eb',background:'#f8fafc'}}>
+              <th style={{padding:'4px 8px'}}/>
+              {CATS.map(cat=>[
+                <th key={cat+'s'} style={{...thStyle,...blStyle}}>Sell</th>,
+                <th key={cat+'t'} style={thStyle}>Target</th>,
+                <th key={cat+'a'} style={thStyle}>Ach%</th>,
+              ])}
+            </tr>
+          </thead>
+          <tbody>
+            {allRegions.map(r=>{
+              const stats=regionStats(r);
+              return(<tr key={r} style={{borderTop:'0.5px solid #f1f5f9'}}>
+                <td style={{padding:'7px 8px',fontWeight:600,color:'#111',fontSize:12}}>{r}</td>
+                {stats.map(({cat,sell,target})=>{
+                  const ap=achPct(sell,target);
+                  const {bg,color}=achBadge(ap);
+                  return[
+                    <td key={cat+'s'} style={{...tdStyle,...blStyle}}>{fmtM(sell)}</td>,
+                    <td key={cat+'t'} style={tdStyle}>{fmtM(target)}</td>,
+                    <td key={cat+'a'} style={{...tdStyle,textAlign:'right'}}>
+                      <span style={{padding:'2px 7px',borderRadius:6,background:bg,color,fontSize:11,fontWeight:700}}>{ap}%</span>
+                    </td>,
+                  ];
+                })}
+              </tr>);
+            })}
+            {/* แถวรวม */}
+            <tr style={{borderTop:'1px solid #e5e7eb',background:'#f8fafc'}}>
+              <td style={{padding:'7px 8px',fontWeight:700,color:'#111',fontSize:12}}>รวม</td>
+              {CATS.map(cat=>{
+                const sell=tSell(cat);const target=tTarget(cat);const ap=achPct(sell,target);
+                const {bg,color}=achBadge(ap);
+                return[
+                  <td key={cat+'s'} style={{...tdStyle,fontWeight:700,color:'#111',...blStyle}}>{fmtM(sell)}</td>,
+                  <td key={cat+'t'} style={{...tdStyle,fontWeight:700,color:'#111'}}>{fmtM(target)}</td>,
+                  <td key={cat+'a'} style={{...tdStyle}}>
+                    <span style={{padding:'2px 7px',borderRadius:6,background:bg,color,fontSize:11,fontWeight:700}}>{ap}%</span>
+                  </td>,
+                ];
+              })}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div style={{display:'flex',gap:14,marginTop:10,fontSize:11,color:'#6b7280'}}>
+        {[['#FCEBEB','#F09595','<80%'],['#FAEEDA','#EF9F27','80–99%'],['#EAF3DE','#97C459','≥100%']].map(([bg,border,label])=>(
+          <span key={label} style={{display:'flex',alignItems:'center',gap:4}}>
+            <span style={{width:10,height:10,borderRadius:2,background:bg,border:`0.5px solid ${border}`,display:'inline-block'}}/>
+            {label}
+          </span>
+        ))}
+      </div>
+    </div>
+
+    {/* ④ Gap to Target */}
+    <div style={{...card,marginBottom:14}}>
+      <div style={{fontSize:14,fontWeight:700,color:'#111',marginBottom:3}}>Gap to Target — แยกตาม Region × Category</div>
+      <div style={{fontSize:11,color:'#6b7280',marginBottom:14}}>ยอดที่ต้องขายเพิ่ม — ค่าบวก = เกินเป้า</div>
+      <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+        <thead>
+          <tr style={{borderBottom:'0.5px solid #e5e7eb'}}>
+            <th style={{...thStyle,textAlign:'left',width:'16%'}}>Region</th>
+            {CATS.map(cat=>(
+              <th key={cat} style={{...thStyle,color:cat==='REF'?'#185FA5':cat==='WM'?'#534AB7':'#0F6E56',...blStyle}}>{cat} Gap</th>
+            ))}
+            <th style={{...thStyle,...blStyle}}>รวม</th>
+          </tr>
+        </thead>
+        <tbody>
+          {allRegions.map(r=>{
+            const g=regionGap(r);
+            const total=CATS.reduce((s,cat)=>s+(g[cat]||0),0);
+            return(<tr key={r} style={{borderTop:'0.5px solid #f1f5f9'}}>
+              <td style={{padding:'8px',fontWeight:600,color:'#111'}}>{r}</td>
+              {CATS.map(cat=>{
+                const v=g[cat]||0;const pct=Math.abs(v)/maxAbsGap*100;
+                return(<td key={cat} style={{padding:'8px',...blStyle}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                    <div style={{flex:1,height:6,borderRadius:3,background:'#f1f5f9',overflow:'hidden'}}>
+                      <div style={{height:'100%',width:`${pct}%`,background:v>=0?'#639922':'#E24B4A',borderRadius:3}}/>
+                    </div>
+                    <span style={{color:gapColor(v),fontWeight:600,whiteSpace:'nowrap',fontSize:12}}>{fmtM(v)}</span>
+                  </div>
+                </td>);
+              })}
+              <td style={{padding:'8px',...blStyle,textAlign:'right'}}>
+                <span style={{padding:'2px 8px',borderRadius:6,background:total>=0?'#EAF3DE':total>=-2000000?'#FAEEDA':'#FCEBEB',color:total>=0?'#3B6D11':total>=-2000000?'#854F0B':'#A32D2D',fontSize:11,fontWeight:700}}>{fmtM(total)}</span>
+              </td>
+            </tr>);
+          })}
+          <tr style={{borderTop:'1px solid #e5e7eb',background:'#f8fafc'}}>
+            <td style={{padding:'8px',fontWeight:700,color:'#111'}}>รวม</td>
+            {CATS.map(cat=>{
+              const v=sites.reduce((s,x)=>s+(x[cat]?.sell||0)-(x[cat]?.target||0),0);
+              return(<td key={cat} style={{padding:'8px',fontWeight:700,color:gapColor(v),textAlign:'right',...blStyle}}>{fmtM(v)}</td>);
+            })}
+            <td style={{padding:'8px',textAlign:'right',...blStyle}}>
+              <span style={{padding:'2px 8px',borderRadius:6,background:grandGap>=0?'#EAF3DE':'#FCEBEB',color:grandGap>=0?'#3B6D11':'#A32D2D',fontSize:11,fontWeight:700}}>{fmtM(grandGap)}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    {/* ⑤ Bottom 10 */}
+    {[{title:'Bottom 10 — ต้องเร่งแก้ไข',sub:'เรียงจาก Ach% รวมต่ำสุด',data:bottom10},
+      {title:'Top 10 — Benchmark ดีเด่น',sub:'เรียงจาก Ach% รวมสูงสุด',data:top10}
+    ].map(({title,sub,data})=>(
+      <div key={title} style={{...card,marginBottom:14}}>
+        <div style={{fontSize:14,fontWeight:700,color:'#111',marginBottom:3}}>{title}</div>
+        <div style={{fontSize:11,color:'#6b7280',marginBottom:14}}>{sub}</div>
+        <div style={{overflowX:'auto'}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+            <thead>
+              <tr style={{borderBottom:'0.5px solid #e5e7eb'}}>
+                <th style={{...thStyle,textAlign:'left',width:'26%'}}>สาขา</th>
+                <th style={{...thStyle,textAlign:'left',width:'8%'}}>AS</th>
+                {CATS.map(cat=>(
+                  <th key={cat} colSpan={2} style={{...thStyle,textAlign:'center',color:cat==='REF'?'#185FA5':cat==='WM'?'#534AB7':'#0F6E56',...blStyle}}>{cat}</th>
+                ))}
+              </tr>
+              <tr style={{borderBottom:'0.5px solid #e5e7eb',background:'#f8fafc'}}>
+                <th style={{padding:'4px 8px'}}/><th style={{padding:'4px 8px'}}/>
+                {CATS.map(cat=>[
+                  <th key={cat+'s'} style={{...thStyle,...blStyle}}>Sell</th>,
+                  <th key={cat+'a'} style={thStyle}>Ach%</th>,
+                ])}
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((s,i)=>(
+                <tr key={s.site} style={{borderTop:'0.5px solid #f1f5f9'}}
+                  onMouseEnter={e=>e.currentTarget.style.background='#f8fafc'}
+                  onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                  <td style={{padding:'6px 8px',fontWeight:600,color:'#111',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.site}</td>
+                  <td style={{padding:'6px 8px',color:'#6b7280',fontSize:11}}>{s.as_code?.replace('AS ','')}</td>
+                  {CATS.map(cat=>{
+                    const ap=achPct(s[cat]?.sell,s[cat]?.target);
+                    const {bg,color}=achBadge(ap);
+                    return[
+                      <td key={cat+'s'} style={{...tdStyle,...blStyle}}>{fmtM(s[cat]?.sell||0)}</td>,
+                      <td key={cat+'a'} style={{...tdStyle}}>
+                        <span style={{padding:'2px 6px',borderRadius:6,background:bg,color,fontSize:11,fontWeight:700}}>{ap}%</span>
+                      </td>,
+                    ];
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    ))}
   </div>);
 }
 
