@@ -246,6 +246,8 @@ function DashboardPage({feedbacks,activeSites}){
   const [rf,setRf]=useState('ALL');
   const [af,setAf]=useState('ALL');
   const [ac,setAc]=useState('ALL');
+  const [chartMode,setChartMode]=useState('ach'); // 'ach' | 'sell'
+  const [top30Region,setTop30Region]=useState('ALL');
 
   const regions=[...new Set(activeSites.map(s=>s.region))].sort();
   const availableAccounts=[...new Set((rf==='ALL'?activeSites:activeSites.filter(s=>s.region===rf)).map(s=>s.account||'Unknown').filter(Boolean))].sort();
@@ -281,12 +283,6 @@ function DashboardPage({feedbacks,activeSites}){
     },{});
   };
   const maxAbsGap=Math.max(...allRegions.map(r=>{const g=regionGap(r);return Math.max(...CATS.map(c=>Math.abs(g[c]||0)));}),1);
-
-  // Bottom 10 / Top 10 — avg ach% across all cats
-  const avgAch=s=>(achPct(s.REF?.sell,s.REF?.target)+achPct(s.WM?.sell,s.WM?.target)+achPct(s.AC?.sell,s.AC?.target))/3;
-  const sorted=[...sites].sort((a,b)=>avgAch(a)-avgAch(b));
-  const bottom10=sorted.slice(0,10);
-  const top10=[...sorted].reverse().slice(0,10);
 
   function achBadge(ap){
     if(ap>=100)return{bg:'#EAF3DE',color:'#3B6D11'};
@@ -344,7 +340,119 @@ function DashboardPage({feedbacks,activeSites}){
       </div>
     </div>
 
-    {/* ③ Heat Map */}
+    {/* ③ Grouped Bar Chart */}
+    {(()=>{
+      const today=new Date();
+      const lastSunday=new Date(today);
+      lastSunday.setDate(today.getDate()-today.getDay());
+      const refDate=today.getDay()===0?today:lastSunday;
+      const dayOfMonth=refDate.getDate();
+      const daysInMonth=new Date(refDate.getFullYear(),refDate.getMonth()+1,0).getDate();
+      const tgPct=Math.round((dayOfMonth/daysInMonth)*100);
+
+      // คำนวณ max value สำหรับ scale
+      const chartData=allRegions.map(r=>{
+        const rs=sites.filter(s=>s.region===r);
+        return {
+          r,
+          REF: chartMode==='ach'
+            ? achPct(rs.reduce((s,x)=>s+(x.REF?.sell||0),0), rs.reduce((s,x)=>s+(x.REF?.target||0),0))
+            : rs.reduce((s,x)=>s+(x.REF?.sell||0),0)/1000000,
+          WM: chartMode==='ach'
+            ? achPct(rs.reduce((s,x)=>s+(x.WM?.sell||0),0), rs.reduce((s,x)=>s+(x.WM?.target||0),0))
+            : rs.reduce((s,x)=>s+(x.WM?.sell||0),0)/1000000,
+          AC: chartMode==='ach'
+            ? achPct(rs.reduce((s,x)=>s+(x.AC?.sell||0),0), rs.reduce((s,x)=>s+(x.AC?.target||0),0))
+            : rs.reduce((s,x)=>s+(x.AC?.sell||0),0)/1000000,
+        };
+      });
+      const maxVal=Math.max(...chartData.flatMap(d=>[d.REF,d.WM,d.AC]), chartMode==='ach'?120:10);
+      const chartH=200; const chartY0=220; const chartX0=60;
+      const groupW=120; const barW=20; const barGap=4;
+      const totalW=chartX0+allRegions.length*groupW+40;
+      // y position ของค่า v
+      const yPos=v=>chartY0-Math.min(v/maxVal,1.2)*chartH;
+      // y position ของ Time Gone line (Ach% mode = tgPct, sell mode ไม่แสดง)
+      const tgY=chartMode==='ach'?yPos(tgPct):null;
+      const h100Y=chartMode==='ach'?yPos(100):null;
+
+      return(
+        <div style={{...card,marginBottom:14}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:4,flexWrap:'wrap',gap:8}}>
+            <div>
+              <div style={{fontSize:14,fontWeight:700,color:'#111'}}>Performance by Region & Category</div>
+              <div style={{fontSize:11,color:'#6b7280',marginTop:2}}>
+                {chartMode==='ach'?`เส้นประแดง = Time Gone ${tgPct}%`:'ยอดขาย (M฿) แยกตาม Region'}
+              </div>
+            </div>
+            <div style={{display:'flex',gap:6}}>
+              {[['ach','Ach%'],['sell','Sell (M฿)']].map(([v,l])=>(
+                <button key={v} onClick={()=>setChartMode(v)}
+                  style={{padding:'6px 14px',borderRadius:8,border:`1.5px solid ${chartMode===v?'#1e293b':'#e5e7eb'}`,background:chartMode===v?'#1e293b':'#fff',color:chartMode===v?'#fff':'#6b7280',fontSize:12,fontFamily:'inherit',fontWeight:500,cursor:'pointer'}}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{display:'flex',gap:14,marginBottom:10,flexWrap:'wrap'}}>
+            {CATS.map(c=>(
+              <span key={c} style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#6b7280'}}>
+                <span style={{width:10,height:10,borderRadius:2,background:CAT_COLORS[c],display:'inline-block'}}/>
+                {c}
+              </span>
+            ))}
+            {chartMode==='ach'&&<span style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'#ef4444'}}><span style={{width:14,borderTop:'2px dashed #ef4444',display:'inline-block'}}/>Time Gone {tgPct}%</span>}
+          </div>
+          <div style={{overflowX:'auto'}}>
+            <svg viewBox={`0 0 ${totalW} 250`} style={{width:'100%',minWidth:400}}>
+              {/* Grid lines */}
+              {[0,25,50,75,100].map(v=>{
+                const y=yPos(chartMode==='ach'?v:v/100*maxVal);
+                return(<g key={v}>
+                  <line x1={chartX0} y1={y} x2={totalW-10} y2={y} stroke='#f1f5f9' strokeWidth='1'/>
+                  <text x={chartX0-5} y={y+4} textAnchor='end' fontSize='9' fill='#9ca3af'>
+                    {chartMode==='ach'?`${Math.round(v/100*maxVal)}%`:`${(v/100*maxVal).toFixed(1)}M`}
+                  </text>
+                </g>);
+              })}
+              {/* 100% line (Ach mode) */}
+              {h100Y&&<line x1={chartX0} y1={h100Y} x2={totalW-10} y2={h100Y} stroke='#d1d5db' strokeWidth='1.5' strokeDasharray='4,3'/>}
+              {/* Time Gone line */}
+              {tgY&&<>
+                <line x1={chartX0} y1={tgY} x2={totalW-10} y2={tgY} stroke='#ef4444' strokeWidth='1.5' strokeDasharray='6,4' opacity='0.75'/>
+                <text x={totalW-8} y={tgY+4} fontSize='9' fill='#ef4444'>{tgPct}%</text>
+              </>}
+              {/* Bars */}
+              {chartData.map((d,gi)=>{
+                const gx=chartX0+gi*groupW+16;
+                const cats=[{c:'REF',v:d.REF,col:CAT_COLORS.REF},{c:'WM',v:d.WM,col:CAT_COLORS.WM},{c:'AC',v:d.AC,col:CAT_COLORS.AC}];
+                return(<g key={d.r}>
+                  {cats.map((ct,ci)=>{
+                    const bx=gx+ci*(barW+barGap);
+                    const by=yPos(ct.v);
+                    const bh=chartY0-by;
+                    const ap=ct.v;
+                    const barCol=ct.col;
+                    return(<g key={ct.c}>
+                      <rect x={bx} y={by} width={barW} height={Math.max(bh,0)} fill={barCol} rx='2' opacity='.85'/>
+                      <text x={bx+barW/2} y={by-3} textAnchor='middle' fontSize='8.5' fill={barCol} fontWeight='600'>
+                        {chartMode==='ach'?`${Math.round(ap)}%`:`${ap.toFixed(1)}`}
+                      </text>
+                    </g>);
+                  })}
+                  <text x={gx+(barW+barGap)*1.5} y={chartY0+14} textAnchor='middle' fontSize='10' fill='#374151' fontWeight='500'>{d.r.replace('NORTHEAST','NE').replace('CENTRAL','CENTRAL').replace('BANGKOK','BKK').replace('NORTH','NORTH').replace('SOUTH','SOUTH')}</text>
+                </g>);
+              })}
+              {/* Axes */}
+              <line x1={chartX0} y1={20} x2={chartX0} y2={chartY0} stroke='#e5e7eb' strokeWidth='1'/>
+              <line x1={chartX0} y1={chartY0} x2={totalW-10} y2={chartY0} stroke='#e5e7eb' strokeWidth='1'/>
+            </svg>
+          </div>
+        </div>
+      );
+    })()}
+
+    {/* ④ Heat Map */}
     <div style={{...card,marginBottom:14}}>
       <div style={{fontSize:14,fontWeight:700,color:'#111',marginBottom:3}}>Heat Map — Ach% by Region × Category</div>
       <div style={{fontSize:11,color:'#6b7280',marginBottom:14}}>แสดง Sell / Target / Ach% ต่อ Region</div>
@@ -462,55 +570,78 @@ function DashboardPage({feedbacks,activeSites}){
       </table>
     </div>
 
-    {/* ⑤ Bottom 10 */}
-    {[{title:'Bottom 10 — ต้องเร่งแก้ไข',sub:'เรียงจาก Ach% รวมต่ำสุด',data:bottom10},
-      {title:'Top 10 — Benchmark ดีเด่น',sub:'เรียงจาก Ach% รวมสูงสุด',data:top10}
-    ].map(({title,sub,data})=>(
-      <div key={title} style={{...card,marginBottom:14}}>
-        <div style={{fontSize:14,fontWeight:700,color:'#111',marginBottom:3}}>{title}</div>
-        <div style={{fontSize:11,color:'#6b7280',marginBottom:14}}>{sub}</div>
-        <div style={{overflowX:'auto'}}>
-          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-            <thead>
-              <tr style={{borderBottom:'0.5px solid #e5e7eb'}}>
-                <th style={{...thStyle,textAlign:'left',width:'26%'}}>สาขา</th>
-                <th style={{...thStyle,textAlign:'left',width:'8%'}}>AS</th>
-                {CATS.map(cat=>(
-                  <th key={cat} colSpan={2} style={{...thStyle,textAlign:'center',color:cat==='REF'?'#185FA5':cat==='WM'?'#534AB7':'#0F6E56',...blStyle}}>{cat}</th>
-                ))}
-              </tr>
-              <tr style={{borderBottom:'0.5px solid #e5e7eb',background:'#f8fafc'}}>
-                <th style={{padding:'4px 8px'}}/><th style={{padding:'4px 8px'}}/>
-                {CATS.map(cat=>[
-                  <th key={cat+'s'} style={{...thStyle,...blStyle}}>Sell</th>,
-                  <th key={cat+'a'} style={thStyle}>Ach%</th>,
-                ])}
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((s,i)=>(
-                <tr key={s.site} style={{borderTop:'0.5px solid #f1f5f9'}}
-                  onMouseEnter={e=>e.currentTarget.style.background='#f8fafc'}
-                  onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-                  <td style={{padding:'6px 8px',fontWeight:600,color:'#111',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.site}</td>
-                  <td style={{padding:'6px 8px',color:'#6b7280',fontSize:11}}>{s.as_code?.replace('AS ','')}</td>
-                  {CATS.map(cat=>{
-                    const ap=achPct(s[cat]?.sell,s[cat]?.target);
-                    const {bg,color}=achBadge(ap);
-                    return[
-                      <td key={cat+'s'} style={{...tdStyle,...blStyle}}>{fmtM(s[cat]?.sell||0)}</td>,
-                      <td key={cat+'a'} style={{...tdStyle}}>
-                        <span style={{padding:'2px 6px',borderRadius:6,background:bg,color,fontSize:11,fontWeight:700}}>{ap}%</span>
-                      </td>,
-                    ];
-                  })}
+    {/* ⑤ Top 30 by Target */}
+    {(()=>{
+      const top30Sites=(top30Region==='ALL'?sites:sites.filter(s=>s.region===top30Region));
+      const top30=[...top30Sites].sort((a,b)=>{
+        const ta=(b.REF?.target||0)+(b.WM?.target||0)+(b.AC?.target||0);
+        const tb=(a.REF?.target||0)+(a.WM?.target||0)+(a.AC?.target||0);
+        return ta-tb;
+      }).slice(0,30);
+      return(
+        <div style={{...card,marginBottom:14}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:3,flexWrap:'wrap',gap:8}}>
+            <div style={{fontSize:14,fontWeight:700,color:'#111'}}>Top 30 สาขา — เรียงจาก Target รวมสูงสุด</div>
+            <select value={top30Region} onChange={e=>setTop30Region(e.target.value)}
+              style={{...sel,width:'auto',padding:'7px 12px',fontSize:12}}>
+              <option value='ALL'>ทุก Region</option>
+              {regions.map(r=><option key={r}>{r}</option>)}
+            </select>
+          </div>
+          <div style={{fontSize:11,color:'#6b7280',marginBottom:14}}>REF+WM+AC Target รวมสูงสุด 30 อันดับแรก · แสดง Sell / Target / Ach% แยก Category</div>
+          <div style={{overflowX:'auto'}}>
+            <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+              <thead>
+                <tr style={{borderBottom:'0.5px solid #e5e7eb'}}>
+                  <th style={{...thStyle,textAlign:'left',width:'4%'}}>#</th>
+                  <th style={{...thStyle,textAlign:'left',width:'24%'}}>สาขา</th>
+                  <th style={{...thStyle,textAlign:'left',width:'7%'}}>AS</th>
+                  <th style={{...thStyle,textAlign:'right',width:'8%',...blStyle}}>Target รวม</th>
+                  {CATS.map(cat=>(
+                    <th key={cat} colSpan={3} style={{...thStyle,textAlign:'center',color:cat==='REF'?'#185FA5':cat==='WM'?'#534AB7':'#0F6E56',...blStyle}}>{cat}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+                <tr style={{borderBottom:'0.5px solid #e5e7eb',background:'#f8fafc'}}>
+                  <th style={{padding:'4px 6px'}}/><th style={{padding:'4px 6px'}}/><th style={{padding:'4px 6px'}}/>
+                  <th style={{padding:'4px 6px',...blStyle}}/>
+                  {CATS.map(cat=>[
+                    <th key={cat+'s'} style={{...thStyle,...blStyle}}>Sell</th>,
+                    <th key={cat+'t'} style={thStyle}>Target</th>,
+                    <th key={cat+'a'} style={thStyle}>Ach%</th>,
+                  ])}
+                </tr>
+              </thead>
+              <tbody>
+                {top30.map((s,i)=>{
+                  const totalTarget=(s.REF?.target||0)+(s.WM?.target||0)+(s.AC?.target||0);
+                  return(
+                    <tr key={s.site} style={{borderTop:'0.5px solid #f1f5f9'}}
+                      onMouseEnter={e=>e.currentTarget.style.background='#f8fafc'}
+                      onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                      <td style={{padding:'6px 6px',color:'#9ca3af',fontSize:11,textAlign:'center'}}>{i+1}</td>
+                      <td style={{padding:'6px 8px',fontWeight:600,color:'#111',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.site}</td>
+                      <td style={{padding:'6px 6px',color:'#6b7280',fontSize:11}}>{s.as_code?.replace('AS ','')}</td>
+                      <td style={{padding:'6px 6px',fontWeight:700,color:'#111',textAlign:'right',...blStyle}}>{fmtM(totalTarget)}</td>
+                      {CATS.map(cat=>{
+                        const ap=achPct(s[cat]?.sell,s[cat]?.target);
+                        const {bg,color}=achBadge(ap);
+                        return[
+                          <td key={cat+'s'} style={{...tdStyle,...blStyle}}>{fmtM(s[cat]?.sell||0)}</td>,
+                          <td key={cat+'t'} style={{...tdStyle,color:'#9ca3af'}}>{fmtM(s[cat]?.target||0)}</td>,
+                          <td key={cat+'a'} style={{...tdStyle}}>
+                            <span style={{padding:'2px 6px',borderRadius:6,background:bg,color,fontSize:11,fontWeight:700}}>{ap}%</span>
+                          </td>,
+                        ];
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
-    ))}
+      );
+    })()}
   </div>);
 }
 
@@ -959,12 +1090,17 @@ function AdminPage({onUpdateSales}){
 // PERFORMANCE PAGE
 // ============================================================
 function PerformancePage({feedbacks,activeSites}){
-  // Time Gone คำนวณอัตโนมัติจากวันปัจจุบัน
+  // Time Gone — คำนวณจากวันอาทิตย์ล่าสุด (ตรงกับ data cycle ยอดขาย)
   const today=new Date();
-  const dayOfMonth=today.getDate();
-  const daysInMonth=new Date(today.getFullYear(),today.getMonth()+1,0).getDate();
+  const lastSunday=new Date(today);
+  lastSunday.setDate(today.getDate()-today.getDay()); // ย้อนกลับไปวันอาทิตย์ล่าสุด
+  // ถ้าวันนี้เป็นอาทิตย์ ใช้วันนี้เลย ถ้าไม่ใช้อาทิตย์ก่อนหน้า
+  const refDate = today.getDay()===0 ? today : lastSunday;
+  const dayOfMonth=refDate.getDate();
+  const daysInMonth=new Date(refDate.getFullYear(),refDate.getMonth()+1,0).getDate();
   const timeGonePct=Math.round((dayOfMonth/daysInMonth)*100);
-  const monthName=today.toLocaleDateString('th-TH',{month:'long',year:'numeric'});
+  const monthName=refDate.toLocaleDateString('th-TH',{month:'long',year:'numeric'});
+  const refDateStr=refDate.toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'numeric'});
 
   const [region,setRegion]=useState('ALL');
   const [asCode,setAsCode]=useState('ALL');
@@ -1052,14 +1188,14 @@ function PerformancePage({feedbacks,activeSites}){
         <div style={{display:'flex',alignItems:'center',gap:20,flexWrap:'wrap'}}>
           <div style={{flex:1,minWidth:220}}>
             <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
-              <span style={{fontSize:13,color:'#6b7280'}}>Time Gone — {monthName}</span>
+              <span style={{fontSize:13,color:'#6b7280'}}>Time Gone — {monthName} <span style={{fontSize:11,color:'#9ca3af'}}>(ณ {refDateStr})</span></span>
               <span style={{fontSize:15,fontWeight:700,color:'#111'}}>{timeGonePct}%</span>
             </div>
             <div style={{height:8,borderRadius:4,background:'#e5e7eb',overflow:'hidden'}}>
               <div style={{height:'100%',width:`${timeGonePct}%`,background:'#378ADD',borderRadius:4,transition:'width 1s ease'}}/>
             </div>
             <div style={{display:'flex',justifyContent:'space-between',marginTop:4,fontSize:11,color:'#9ca3af'}}>
-              <span>วันที่ {dayOfMonth} จาก {daysInMonth} วัน</span>
+              <span>ณ วันอาทิตย์ที่ {dayOfMonth} จาก {daysInMonth} วัน</span>
               <span>เหลืออีก {daysInMonth-dayOfMonth} วัน</span>
             </div>
           </div>
