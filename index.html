@@ -85,7 +85,7 @@ const btn=(bg,dis=false)=>({width:'100%',padding:14,borderRadius:12,border:'none
 // ============================================================
 // SURVEY
 // ============================================================
-function SurveyPage({feedbacks,onSubmit,sheetsUrl,activeSites,preSelect}){
+function SurveyPage({feedbacks,onSubmit,sheetsUrl,activeSites,preSelect,onNavigate}){
   const [region,setRegion]=useState(preSelect?.region||'');
   const [asCode,setAsCode]=useState(preSelect?.as_code||'');
   const [site,setSite]=useState(preSelect?.site||'');
@@ -129,7 +129,14 @@ function SurveyPage({feedbacks,onSubmit,sheetsUrl,activeSites,preSelect}){
         <p style={{margin:0,color:'#6b7280',fontSize:14}}>{site} · {THIS_WEEK}</p>
         {sheetsUrl&&<p style={{margin:'8px 0 0',fontSize:13,color:'#3b82f6'}}>✓ บันทึก Google Sheets แล้ว</p>}
       </div>
-      <button onClick={reset} style={btn('#1e293b')}>ส่ง Feedback สาขาอื่น</button>
+      <button onClick={()=>{
+        // ถ้ามาจาก Performance ให้กลับไป Performance โดย pre-select region+asCode เดิม
+        if(onNavigate&&preSelect){
+          onNavigate('performance',{region,as_code:asCode});
+        } else {
+          reset();
+        }
+      }} style={btn('#1e293b')}>ส่ง Feedback สาขาอื่น</button>
     </div>
   );
 
@@ -1097,7 +1104,7 @@ function AdminPage({onUpdateSales}){
 // ============================================================
 // PERFORMANCE PAGE
 // ============================================================
-function PerformancePage({feedbacks,activeSites,onNavigate}){
+function PerformancePage({feedbacks,activeSites,onNavigate,preSelect}){
   // Time Gone — คำนวณจากวันอาทิตย์ล่าสุด (ตรงกับ data cycle ยอดขาย)
   const today=new Date();
   const lastSunday=new Date(today);
@@ -1110,8 +1117,8 @@ function PerformancePage({feedbacks,activeSites,onNavigate}){
   const monthName=refDate.toLocaleDateString('th-TH',{month:'long',year:'numeric'});
   const refDateStr=refDate.toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit',year:'numeric'});
 
-  const [region,setRegion]=useState('ALL');
-  const [asCode,setAsCode]=useState('ALL');
+  const [region,setRegion]=useState(preSelect?.region||'ALL');
+  const [asCode,setAsCode]=useState(preSelect?.as_code||'ALL');
 
   const regions=[...new Set(activeSites.map(s=>s.region))].sort();
   const availableAS=[...new Set(
@@ -1477,8 +1484,7 @@ function App(){
   function handleNav(id,preSelect=null){
     if(PROTECTED.includes(id)&&!unlocked) setUnlocked(false);
     if(PROTECTED.includes(page)&&!PROTECTED.includes(id)) setUnlocked(false);
-    if(id==='survey'&&preSelect) setSurveyPreSelect(preSelect);
-    else if(id!=='survey') setSurveyPreSelect(null);
+    setSurveyPreSelect(preSelect);
     setPage(id);
   }
 
@@ -1532,9 +1538,9 @@ function App(){
             ⚠️ ยังมี <strong>{pending} สาขา</strong> ที่ยังไม่ได้ส่ง Feedback สัปดาห์นี้
           </div>
         )}
-        {page==='survey'&&<SurveyPage feedbacks={feedbacks} onSubmit={handleSubmit} sheetsUrl={sheetsUrl} activeSites={activeSites} preSelect={surveyPreSelect}/>}
+        {page==='survey'&&<SurveyPage feedbacks={feedbacks} onSubmit={handleSubmit} sheetsUrl={sheetsUrl} activeSites={activeSites} preSelect={surveyPreSelect} onNavigate={handleNav}/>}
         {page==='dashboard'&&<DashboardPage feedbacks={feedbacks} activeSites={activeSites}/>}
-        {page==='performance'&&<PerformancePage feedbacks={feedbacks} activeSites={activeSites} onNavigate={handleNav}/>}
+        {page==='performance'&&<PerformancePage feedbacks={feedbacks} activeSites={activeSites} onNavigate={handleNav} preSelect={surveyPreSelect}/>}
         {page==='history'&&<HistoryPage feedbacks={feedbacks} activeSites={activeSites}/>}
         {page==='admin'&&(!unlocked
           ?<PasscodeLock title='Admin — อัพโหลดยอดขาย' onUnlock={()=>setUnlocked(true)}/>
