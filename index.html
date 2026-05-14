@@ -85,11 +85,11 @@ const btn=(bg,dis=false)=>({width:'100%',padding:14,borderRadius:12,border:'none
 // ============================================================
 // SURVEY
 // ============================================================
-function SurveyPage({feedbacks,onSubmit,sheetsUrl,activeSites}){
-  const [region,setRegion]=useState('');
-  const [asCode,setAsCode]=useState('');
-  const [site,setSite]=useState('');
-  const [step,setStep]=useState('select');
+function SurveyPage({feedbacks,onSubmit,sheetsUrl,activeSites,preSelect}){
+  const [region,setRegion]=useState(preSelect?.region||'');
+  const [asCode,setAsCode]=useState(preSelect?.as_code||'');
+  const [site,setSite]=useState(preSelect?.site||'');
+  const [step,setStep]=useState(preSelect?.site?'form':'select');
   const [busy,setBusy]=useState(false);
   const [form,setForm]=useState({empId:'',catComments:{REF:'',WM:'',AC:''},catSituations:{REF:'',WM:'',AC:''},issues:[],overallComment:''});
 
@@ -1097,7 +1097,7 @@ function AdminPage({onUpdateSales}){
 // ============================================================
 // PERFORMANCE PAGE
 // ============================================================
-function PerformancePage({feedbacks,activeSites}){
+function PerformancePage({feedbacks,activeSites,onNavigate}){
   // Time Gone — คำนวณจากวันอาทิตย์ล่าสุด (ตรงกับ data cycle ยอดขาย)
   const today=new Date();
   const lastSunday=new Date(today);
@@ -1357,12 +1357,18 @@ function PerformancePage({feedbacks,activeSites}){
                     ];
                     return(
                       <div key={s.site} style={{background:'#fff',border:'0.5px solid #e5e7eb',borderRadius:12,padding:'12px 14px'}}>
-                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-                          <div style={{fontWeight:700,fontSize:13,color:'#111'}}>{s.site}</div>
-                          {fb
-                            ?<span style={{padding:'2px 8px',borderRadius:20,background:'#dcfce7',color:'#16a34a',fontSize:10,fontWeight:700,whiteSpace:'nowrap'}}>✓ ส่งแล้ว</span>
-                            :<span style={{padding:'2px 8px',borderRadius:20,background:'#fef3c7',color:'#d97706',fontSize:10,fontWeight:700,whiteSpace:'nowrap'}}>รอ</span>
-                          }
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10,gap:8}}>
+                          <div style={{fontWeight:700,fontSize:13,color:'#111',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>{s.site}</div>
+                          <div style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
+                            {fb
+                              ?<span style={{padding:'2px 8px',borderRadius:20,background:'#dcfce7',color:'#16a34a',fontSize:10,fontWeight:700,whiteSpace:'nowrap'}}>✓ ส่งแล้ว</span>
+                              :<span style={{padding:'2px 8px',borderRadius:20,background:'#fef3c7',color:'#d97706',fontSize:10,fontWeight:700,whiteSpace:'nowrap'}}>รอ</span>
+                            }
+                            <button onClick={()=>onNavigate('survey',{region:s.region,as_code:s.as_code,site:s.site})}
+                              style={{display:'flex',alignItems:'center',gap:4,padding:'5px 10px',borderRadius:8,border:'0.5px solid #e5e7eb',background:'#f8fafc',color:'#374151',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>
+                              📋 Survey
+                            </button>
+                          </div>
                         </div>
                         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
                           {catData.map(({cat,sell,target,ap})=>(
@@ -1401,6 +1407,7 @@ function App(){
   const [liveSales,setLiveSales]=useState(null);
   const [loading,setLoading]=useState(true);
   const [unlocked,setUnlocked]=useState(false);
+  const [surveyPreSelect,setSurveyPreSelect]=useState(null);
 
   const SHEETS_URL='https://script.google.com/macros/s/AKfycbwgqtEp_6RNtMDcopoerzdCdbi3bcZxW2AGA_vr5FqlCfrx0zfQ29k91Rjq4e5zhzw5/exec';
 
@@ -1467,9 +1474,11 @@ function App(){
   },[]);
 
   const PROTECTED=['admin','setup'];
-  function handleNav(id){
+  function handleNav(id,preSelect=null){
     if(PROTECTED.includes(id)&&!unlocked) setUnlocked(false);
     if(PROTECTED.includes(page)&&!PROTECTED.includes(id)) setUnlocked(false);
+    if(id==='survey'&&preSelect) setSurveyPreSelect(preSelect);
+    else if(id!=='survey') setSurveyPreSelect(null);
     setPage(id);
   }
 
@@ -1523,9 +1532,9 @@ function App(){
             ⚠️ ยังมี <strong>{pending} สาขา</strong> ที่ยังไม่ได้ส่ง Feedback สัปดาห์นี้
           </div>
         )}
-        {page==='survey'&&<SurveyPage feedbacks={feedbacks} onSubmit={handleSubmit} sheetsUrl={sheetsUrl} activeSites={activeSites}/>}
+        {page==='survey'&&<SurveyPage feedbacks={feedbacks} onSubmit={handleSubmit} sheetsUrl={sheetsUrl} activeSites={activeSites} preSelect={surveyPreSelect}/>}
         {page==='dashboard'&&<DashboardPage feedbacks={feedbacks} activeSites={activeSites}/>}
-        {page==='performance'&&<PerformancePage feedbacks={feedbacks} activeSites={activeSites}/>}
+        {page==='performance'&&<PerformancePage feedbacks={feedbacks} activeSites={activeSites} onNavigate={handleNav}/>}
         {page==='history'&&<HistoryPage feedbacks={feedbacks} activeSites={activeSites}/>}
         {page==='admin'&&(!unlocked
           ?<PasscodeLock title='Admin — อัพโหลดยอดขาย' onUnlock={()=>setUnlocked(true)}/>
