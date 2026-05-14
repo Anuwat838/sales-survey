@@ -284,8 +284,16 @@ function DashboardPage({feedbacks,activeSites}){
   };
   const maxAbsGap=Math.max(...allRegions.map(r=>{const g=regionGap(r);return Math.max(...CATS.map(c=>Math.abs(g[c]||0)));}),1);
 
+  // คำนวณ Time Gone (วันอาทิตย์ล่าสุด) สำหรับ Dashboard
+  const _today=new Date();
+  const _lastSun=new Date(_today);
+  _lastSun.setDate(_today.getDate()-_today.getDay());
+  const _refDate=_today.getDay()===0?_today:_lastSun;
+  const _dim=new Date(_refDate.getFullYear(),_refDate.getMonth()+1,0).getDate();
+  const dashTgPct=Math.round((_refDate.getDate()/_dim)*100);
+
   function achBadge(ap){
-    if(ap>=100)return{bg:'#EAF3DE',color:'#3B6D11'};
+    if(ap>=dashTgPct)return{bg:'#EAF3DE',color:'#3B6D11'};
     if(ap>=80)return{bg:'#FAEEDA',color:'#854F0B'};
     return{bg:'#FCEBEB',color:'#A32D2D'};
   }
@@ -1153,12 +1161,12 @@ function PerformancePage({feedbacks,activeSites}){
   });
 
   function achColor(p){
-    if(p>=100)return{bg:'#EAF3DE',color:'#3B6D11'};
+    if(p>=timeGonePct)return{bg:'#EAF3DE',color:'#3B6D11'};
     if(p>=80)return{bg:'#FAEEDA',color:'#854F0B'};
     return{bg:'#FCEBEB',color:'#A32D2D'};
   }
   function barColor(p){
-    if(p>=100)return'#3B6D11';
+    if(p>=timeGonePct)return'#3B6D11';
     if(p>=80)return'#BA7517';
     return'#E24B4A';
   }
