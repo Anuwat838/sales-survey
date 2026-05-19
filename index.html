@@ -1119,16 +1119,22 @@ function PerformancePage({feedbacks,activeSites,onNavigate,preSelect}){
 
   const [region,setRegion]=useState(preSelect?.region||'ALL');
   const [asCode,setAsCode]=useState(preSelect?.as_code||'ALL');
+  const [acFilter,setAcFilter]=useState('ALL');
 
   const regions=[...new Set(activeSites.map(s=>s.region))].sort();
+  const availableAccounts=[...new Set(activeSites.map(s=>s.account||'Unknown').filter(Boolean))].sort();
+  const availableRegions=[...new Set(
+    (acFilter==='ALL'?activeSites:activeSites.filter(s=>s.account===acFilter)).map(s=>s.region)
+  )].sort();
   const availableAS=[...new Set(
-    (region==='ALL'?activeSites:activeSites.filter(s=>s.region===region)).map(s=>s.as_code)
+    activeSites.filter(s=>(acFilter==='ALL'||s.account===acFilter)&&(region==='ALL'||s.region===region)).map(s=>s.as_code)
   )].sort();
 
-  // reset AS เมื่อเปลี่ยน Region
+  const handleAccountFilterChange=e=>{setAcFilter(e.target.value);setRegion('ALL');setAsCode('ALL');};
   const handleRegionChange=e=>{setRegion(e.target.value);setAsCode('ALL');};
 
   const filteredSites=activeSites.filter(s=>
+    (acFilter==='ALL'||s.account===acFilter)&&
     (region==='ALL'||s.region===region)&&
     (asCode==='ALL'||s.as_code===asCode)
   );
@@ -1180,18 +1186,31 @@ function PerformancePage({feedbacks,activeSites,onNavigate,preSelect}){
 
   return(
     <div style={{maxWidth:1100,margin:'0 auto'}}>
-      {/* Header + Filters */}
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,flexWrap:'wrap',gap:12}}>
+      {/* Header */}
+      <div style={{marginBottom:14}}>
+        <div style={{fontWeight:700,fontSize:18,color:'#111'}}>[DA] Hyper Performance</div>
+        <div style={{fontSize:12,color:'#6b7280',marginTop:2}}>{THIS_WEEK}</div>
+      </div>
+
+      {/* Filters — Account > Region > AS Code */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10,marginBottom:20}}>
         <div>
-          <div style={{fontWeight:700,fontSize:18,color:'#111'}}>[DA] Hyper Performance</div>
-          <div style={{fontSize:12,color:'#6b7280',marginTop:2}}>{THIS_WEEK}</div>
-        </div>
-        <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
-          <select value={region} onChange={handleRegionChange} style={{...sel,width:'auto',padding:'9px 14px'}}>
-            <option value='ALL'>ทุก Region</option>
-            {regions.map(r=><option key={r}>{r}</option>)}
+          <div style={{fontSize:11,color:'#6b7280',marginBottom:4}}>Account</div>
+          <select value={acFilter} onChange={handleAccountFilterChange} style={{...sel}}>
+            <option value='ALL'>ทุก Account</option>
+            {availableAccounts.map(a=><option key={a}>{a}</option>)}
           </select>
-          <select value={asCode} onChange={e=>setAsCode(e.target.value)} style={{...sel,width:'auto',padding:'9px 14px'}}>
+        </div>
+        <div>
+          <div style={{fontSize:11,color:'#6b7280',marginBottom:4}}>Region</div>
+          <select value={region} onChange={handleRegionChange} style={{...sel}}>
+            <option value='ALL'>ทุก Region</option>
+            {availableRegions.map(r=><option key={r}>{r}</option>)}
+          </select>
+        </div>
+        <div>
+          <div style={{fontSize:11,color:'#6b7280',marginBottom:4}}>AS Code</div>
+          <select value={asCode} onChange={e=>setAsCode(e.target.value)} style={{...sel}}>
             <option value='ALL'>ทุก AS Code</option>
             {availableAS.map(a=><option key={a}>{a}</option>)}
           </select>
