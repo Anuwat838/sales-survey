@@ -1148,12 +1148,27 @@ function PerformancePage({feedbacks,activeSites,onNavigate,preSelect}){
 
   // Account groups
   const accounts=[...new Set(filteredSites.map(s=>s.account||'Unknown'))].sort();
-  const ACCT_COLORS={
-    'Lotus':{bg:'#E6F1FB',color:'#185FA5'},
-    'BigC':{bg:'#EEEDFE',color:'#534AB7'},
-    'Makro':{bg:'#E1F5EE',color:'#0F6E56'},
+  // สีที่กำหนดตายตัวสำหรับ Account หลัก
+  const ACCT_COLORS_FIXED={
+    'Lotus':   {bg:'#E6F1FB',color:'#185FA5'},
+    'BigC':    {bg:'#EEEDFE',color:'#534AB7'},
+    'Makro':   {bg:'#E1F5EE',color:'#0F6E56'},
+    'HOMEPRO': {bg:'#FFF3E0',color:'#E65100'},
   };
-  const getAcctColor=a=>ACCT_COLORS[a]||{bg:'#F1EFE8',color:'#5F5E5A'};
+  // Palette สำหรับ Account ใหม่ที่เพิ่มขึ้นมา (สุ่มจาก hash ชื่อ)
+  const PALETTE=[
+    {bg:'#FCE4EC',color:'#880E4F'},{bg:'#F3E5F5',color:'#6A1B9A'},
+    {bg:'#E8EAF6',color:'#283593'},{bg:'#E0F7FA',color:'#006064'},
+    {bg:'#E8F5E9',color:'#1B5E20'},{bg:'#FFFDE7',color:'#F57F17'},
+    {bg:'#FBE9E7',color:'#BF360C'},{bg:'#EFEBE9',color:'#4E342E'},
+    {bg:'#F1F8E9',color:'#33691E'},{bg:'#E0F2F1',color:'#004D40'},
+  ];
+  function hashColor(str){
+    let h=0;
+    for(let i=0;i<str.length;i++) h=(h*31+str.charCodeAt(i))>>>0;
+    return PALETTE[h%PALETTE.length];
+  }
+  const getAcctColor=a=>ACCT_COLORS_FIXED[a]||hashColor(a||'Unknown');
 
   // Feedback status
   const fbMap={};
