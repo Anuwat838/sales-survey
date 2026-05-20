@@ -1336,6 +1336,7 @@ function PerformancePage({feedbacks,activeSites,onNavigate,preSelect}){
         <div style={{display:'flex',flexDirection:'column',gap:20}}>
           {accounts.map(acct=>{
             const acctSites=filteredSites.filter(s=>(s.account||'Unknown')===acct);
+            if(acctSites.length===0)return null;
             const {bg,color}=getAcctColor(acct);
             return(
               <div key={acct}>
