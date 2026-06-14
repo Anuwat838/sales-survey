@@ -727,35 +727,50 @@ function ASQualityPage({feedbacks,activeSites}){
 
   // คำนวณ weeks ที่ต้องส่ง (เฉพาะ weeks ที่ filter)
   const targetWeeks=selWeek==='ALL'?weeks.map(w=>w.label):[selWeek];
-  const totalExpected=activeSites.length*targetWeeks.length;
-  const totalSent=filtered.length;
+
+  // นับ unique site ที่ส่ง feedback (dedup ด้วย site+week)
+  function countSentSites(fbList,siteList){
+    // สร้าง set ของ "site|week" ที่ส่งแล้ว
+    const sentKeys=new Set(fbList.map(f=>`${f.site}|${f.week}`));
+    // นับว่ามีกี่ site+week combination จาก siteList ที่มีใน sentKeys
+    let count=0;
+    siteList.forEach(s=>{
+      targetWeeks.forEach(w=>{
+        if(sentKeys.has(`${s.site}|${w}`)) count++;
+      });
+    });
+    return count;
+  }
+
+  const totalExpected=activeSites.length;
+  const totalSent=countSentSites(filtered,activeSites);
   const rate=totalExpected>0?Math.round((totalSent/totalExpected)*100):0;
 
-  // AS ที่ครบ 100%
+  // build map: as_code → sites[] จาก activeSites (SALES_DATA)
   const allAS=[...new Set(activeSites.map(s=>s.as_code))];
   const asSites={};
   activeSites.forEach(s=>{
     if(!asSites[s.as_code])asSites[s.as_code]=[];
-    asSites[s.as_code].push(s.site);
+    asSites[s.as_code].push(s);
   });
+
   const asComplete=allAS.filter(as=>{
     const sites=asSites[as]||[];
-    const expected=sites.length*targetWeeks.length;
-    const sent=filtered.filter(f=>f.as_code===as).length;
-    return expected>0&&sent>=expected;
+    const sent=countSentSites(filtered,sites);
+    return sites.length>0&&sent>=sites.length;
   });
   const asZero=allAS.filter(as=>{
-    const sent=filtered.filter(f=>f.as_code===as).length;
+    const sites=asSites[as]||[];
+    const sent=countSentSites(filtered,sites);
     return sent===0;
   });
 
   // Region stats
   function getRegionStats(region){
     const rs=activeSites.filter(s=>s.region===region);
-    const expected=rs.length*targetWeeks.length;
-    const sent=filtered.filter(f=>f.region===region).length;
+    const sent=countSentSites(filtered,rs);
     const asInRegion=[...new Set(rs.map(s=>s.as_code))];
-    return{expected,sent,rate:expected>0?Math.round((sent/expected)*100):0,sites:rs.length,asCount:asInRegion.length};
+    return{sites:rs.length,sent,rate:rs.length>0?Math.round((sent/rs.length)*100):0,asCount:asInRegion.length};
   }
 
   // AS stats ใน region
@@ -764,10 +779,10 @@ function ASQualityPage({feedbacks,activeSites}){
     const asInRegion=[...new Set(rs.map(s=>s.as_code))].sort();
     return asInRegion.map(as=>{
       const sites=rs.filter(s=>s.as_code===as);
-      const expected=sites.length*targetWeeks.length;
-      const sent=filtered.filter(f=>f.as_code===as&&f.region===region).length;
-      const r=expected>0?Math.round((sent/expected)*100):0;
-      return{as_code:as,sites:sites.length,expected,sent,rate:r};
+      const totalSites=sites.length;
+      const sent=countSentSites(filtered,sites);
+      const r=totalSites>0?Math.round((sent/totalSites)*100):0;
+      return{as_code:as,sites:totalSites,sent,rate:r};
     }).sort((a,b)=>b.rate-a.rate);
   }
 
@@ -847,7 +862,7 @@ function ASQualityPage({feedbacks,activeSites}){
                   onMouseLeave={e=>e.currentTarget.style.boxShadow='0 2px 8px rgba(0,0,0,.06)'}>
                   <div style={{fontSize:12,fontWeight:700,color:'#0f172a',marginBottom:8}}>📍 {r}</div>
                   <div style={{display:'flex',gap:16,marginBottom:8}}>
-                    <div style={{fontSize:11,color:'#6b7280'}}>สาขา<span style={{display:'block',fontSize:16,fontWeight:700,color:'#0f172a'}}>{s.sent}/{s.expected}</span></div>
+                    <div style={{fontSize:11,color:'#6b7280'}}>สาขา<span style={{display:'block',fontSize:16,fontWeight:700,color:'#0f172a'}}>{s.sent}/{s.sites}</span></div>
                     <div style={{fontSize:11,color:'#6b7280'}}>Rate<span style={{display:'block',fontSize:16,fontWeight:700,color:s.rate>=80?'#16a34a':s.rate>=50?'#d97706':'#dc2626'}}>{s.rate}%</span></div>
                     <div style={{fontSize:11,color:'#6b7280'}}>AS<span style={{display:'block',fontSize:16,fontWeight:700,color:'#0f172a'}}>{s.asCount}</span></div>
                   </div>
@@ -878,7 +893,7 @@ function ASQualityPage({feedbacks,activeSites}){
               <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
                 <thead>
                   <tr style={{background:'#f8fafc'}}>
-                    {['AS Code','สาขาทั้งหมด','รายการที่ต้องส่ง','ส่งแล้ว','Rate','Progress','สถานะ'].map(h=>(
+                    {['AS Code','สาขาทั้งหมด','ส่งแล้ว','Rate','Progress','สถานะ'].map(h=>(
                       <th key={h} style={{padding:'7px 10px',textAlign:'left',fontSize:11,fontWeight:700,color:'#6b7280',borderBottom:'1px solid #f1f5f9',whiteSpace:'nowrap'}}>{h}</th>
                     ))}
                   </tr>
@@ -890,7 +905,6 @@ function ASQualityPage({feedbacks,activeSites}){
                         <span style={{padding:'2px 8px',borderRadius:6,background:'#eff6ff',color:'#1d4ed8',fontSize:11,fontWeight:700}}>{a.as_code}</span>
                       </td>
                       <td style={{padding:'8px 10px',color:'#374151'}}>{a.sites}</td>
-                      <td style={{padding:'8px 10px',color:'#374151'}}>{a.expected}</td>
                       <td style={{padding:'8px 10px',fontWeight:700,color:'#0f172a'}}>{a.sent}</td>
                       <td style={{padding:'8px 10px',fontWeight:700,color:a.rate>=80?'#16a34a':a.rate>=50?'#d97706':'#dc2626'}}>{a.rate}%</td>
                       <td style={{padding:'8px 10px',minWidth:120}}>
@@ -898,11 +912,11 @@ function ASQualityPage({feedbacks,activeSites}){
                           <div style={{flex:1,height:5,borderRadius:3,background:'#f1f5f9',overflow:'hidden'}}>
                             <div style={{height:'100%',width:`${Math.min(a.rate,100)}%`,background:a.rate>=80?'#22c55e':a.rate>=50?'#f59e0b':'#ef4444',borderRadius:3}}/>
                           </div>
-                          <span style={{fontSize:11,color:'#9ca3af',minWidth:32}}>{a.sent}/{a.expected}</span>
+                          <span style={{fontSize:11,color:'#9ca3af',minWidth:32}}>{a.sent}/{a.sites}</span>
                         </div>
                       </td>
                       <td style={{padding:'8px 10px'}}>
-                        <StatusPill rate={a.rate} expected={a.expected}/>
+                        <StatusPill rate={a.rate} expected={a.sites}/>
                       </td>
                     </tr>
                   ))}
