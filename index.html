@@ -705,7 +705,7 @@ function ASQualityPage({feedbacks,activeSites}){
   const now=new Date();
   const [selYear,setSelYear]=useState(now.getFullYear());
   const [selMonth,setSelMonth]=useState(now.getMonth()); // 0-based
-  const [selWeek,setSelWeek]=useState('ALL'); // 'ALL' | label string
+  const [selWeeks,setSelWeeks]=useState([]); // [] = ทุกสัปดาห์, มีค่า = เลือกเฉพาะ
   const [selRegion,setSelRegion]=useState(null); // null = ดูภาพรวม
 
   const years=[...new Set([now.getFullYear()-1,now.getFullYear()])].sort();
@@ -718,7 +718,7 @@ function ASQualityPage({feedbacks,activeSites}){
     const fy=d.getFullYear();
     const fm=d.getMonth();
     if(fy!==selYear||fm!==selMonth) return false;
-    if(selWeek!=='ALL'&&f.week!==selWeek) return false;
+    if(selWeeks.length>0&&!selWeeks.includes(f.week)) return false;
     return true;
   });
 
@@ -726,18 +726,15 @@ function ASQualityPage({feedbacks,activeSites}){
   const regions=[...new Set(activeSites.map(s=>s.region))].sort();
 
   // คำนวณ weeks ที่ต้องส่ง (เฉพาะ weeks ที่ filter)
-  const targetWeeks=selWeek==='ALL'?weeks.map(w=>w.label):[selWeek];
+  const targetWeeks=selWeeks.length>0?selWeeks:weeks.map(w=>w.label);
 
   // นับ unique site ที่ส่ง feedback (dedup ด้วย site+week)
   function countSentSites(fbList,siteList){
-    // สร้าง set ของ "site|week" ที่ส่งแล้ว
     const sentKeys=new Set(fbList.map(f=>`${f.site}|${f.week}`));
-    // นับว่ามีกี่ site+week combination จาก siteList ที่มีใน sentKeys
     let count=0;
     siteList.forEach(s=>{
-      targetWeeks.forEach(w=>{
-        if(sentKeys.has(`${s.site}|${w}`)) count++;
-      });
+      const hasSent=targetWeeks.some(w=>sentKeys.has(`${s.site}|${w}`));
+      if(hasSent) count++;
     });
     return count;
   }
@@ -805,29 +802,34 @@ function ASQualityPage({feedbacks,activeSites}){
       {/* Filter bar */}
       <div style={{display:'flex',alignItems:'center',gap:8,padding:'10px 14px',background:'#fff',borderRadius:12,marginBottom:16,flexWrap:'wrap',boxShadow:'0 1px 4px rgba(0,0,0,.06)'}}>
         <span style={{fontSize:12,color:'#6b7280',fontWeight:600}}>📅 ปี</span>
-        <select value={selYear} onChange={e=>{setSelYear(Number(e.target.value));setSelWeek('ALL');}}
+        <select value={selYear} onChange={e=>{setSelYear(Number(e.target.value));setSelWeeks([]);}}
           style={{fontSize:12,padding:'5px 10px',borderRadius:8,border:'1px solid #e5e7eb',background:'#f8fafc',color:'#111'}}>
           {years.map(y=><option key={y} value={y}>{y}</option>)}
         </select>
         <span style={{fontSize:12,color:'#6b7280',fontWeight:600}}>เดือน</span>
-        <select value={selMonth} onChange={e=>{setSelMonth(Number(e.target.value));setSelWeek('ALL');}}
+        <select value={selMonth} onChange={e=>{setSelMonth(Number(e.target.value));setSelWeeks([]);}}
           style={{fontSize:12,padding:'5px 10px',borderRadius:8,border:'1px solid #e5e7eb',background:'#f8fafc',color:'#111'}}>
           {MONTHS_TH.map((m,i)=><option key={i} value={i}>{m}</option>)}
         </select>
         <div style={{width:1,height:20,background:'#e5e7eb',margin:'0 4px'}}/>
         <span style={{fontSize:12,color:'#6b7280',fontWeight:600}}>สัปดาห์</span>
         <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
-          <button onClick={()=>setSelWeek('ALL')}
-            style={{padding:'3px 12px',borderRadius:20,fontSize:11,border:`1.5px solid ${selWeek==='ALL'?'#3b82f6':'#e5e7eb'}`,background:selWeek==='ALL'?'#eff6ff':'#fff',color:selWeek==='ALL'?'#1d4ed8':'#6b7280',fontWeight:selWeek==='ALL'?700:400,cursor:'pointer'}}>
-            ทั้งเดือน
-          </button>
-          {weeks.map((w,i)=>(
-            <button key={w.label} onClick={()=>setSelWeek(w.label)}
-              style={{padding:'3px 12px',borderRadius:20,fontSize:11,border:`1.5px solid ${selWeek===w.label?'#3b82f6':'#e5e7eb'}`,background:selWeek===w.label?'#eff6ff':'#fff',color:selWeek===w.label?'#1d4ed8':'#6b7280',fontWeight:selWeek===w.label?700:400,cursor:'pointer'}}>
-              W{i+1} {w.mon.getDate()}/{w.mon.getMonth()+1}–{w.sun.getDate()}/{w.sun.getMonth()+1}
-            </button>
-          ))}
+          {weeks.map((w,i)=>{
+            const active=selWeeks.includes(w.label);
+            return(
+              <button key={w.label} onClick={()=>setSelWeeks(prev=>active?prev.filter(x=>x!==w.label):[...prev,w.label])}
+                style={{padding:'3px 12px',borderRadius:20,fontSize:11,border:`1.5px solid ${active?'#3b82f6':'#e5e7eb'}`,background:active?'#eff6ff':'#fff',color:active?'#1d4ed8':'#6b7280',fontWeight:active?700:400,cursor:'pointer'}}>
+                W{i+1} {w.mon.getDate()}/{w.mon.getMonth()+1}–{w.sun.getDate()}/{w.sun.getMonth()+1}
+              </button>
+            );
+          })}
           {weeks.length===0&&<span style={{fontSize:11,color:'#9ca3af'}}>ไม่มีข้อมูลสัปดาห์</span>}
+          {selWeeks.length>0&&(
+            <button onClick={()=>setSelWeeks([])}
+              style={{padding:'3px 10px',borderRadius:20,fontSize:11,border:'1.5px solid #fca5a5',background:'#fff1f2',color:'#dc2626',fontWeight:500,cursor:'pointer'}}>
+              ✕ ล้าง
+            </button>
+          )}
         </div>
       </div>
 
@@ -835,7 +837,7 @@ function ASQualityPage({feedbacks,activeSites}){
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:16}}>
         {[
           {label:'ส่ง Feedback แล้ว',val:`${totalSent}`,sub:`จาก ${totalExpected} รายการ`},
-          {label:'Submission Rate',val:`${rate}%`,sub:`${MONTHS_TH[selMonth]} ${selYear}${selWeek!=='ALL'?' · '+weeks.find(w=>w.label===selWeek)?.num?`W${weeks.find(w=>w.label===selWeek)?.num}`:'':''}`},
+          {label:'Submission Rate',val:`${rate}%`,sub:`${MONTHS_TH[selMonth]} ${selYear}${selWeeks.length>0?' · '+selWeeks.map((_,i)=>`W${weeks.findIndex(w=>w.label===_)+1}`).join(', '):''}`},
           {label:'AS ที่ครบ 100%',val:`${asComplete.length} / ${allAS.length}`,sub:'AS Codes ทั้งหมด'},
           {label:'AS ที่ยังไม่ส่งเลย',val:`${asZero.length}`,sub:'ต้องติดตาม',danger:asZero.length>0},
         ].map((m,i)=>(
@@ -886,7 +888,7 @@ function ASQualityPage({feedbacks,activeSites}){
               <span style={{fontSize:14,fontWeight:700,color:'#0f172a'}}>📍 {selRegion} — รายละเอียด AS</span>
               <span style={{fontSize:11,color:'#9ca3af',marginLeft:'auto'}}>
                 {getASStats(selRegion).length} AS · {activeSites.filter(s=>s.region===selRegion).length} สาขา
-                {selWeek!=='ALL'?' · '+selWeek:''}
+                {selWeeks.length>0?' · '+selWeeks.map((_,i)=>`W${weeks.findIndex(w=>w.label===_)+1}`).join(', '):''}
               </span>
             </div>
             <div style={{overflowX:'auto'}}>
