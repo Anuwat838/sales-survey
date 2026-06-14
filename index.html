@@ -1337,24 +1337,29 @@ function App(){
 
   const SHEETS_URL='https://script.google.com/macros/s/AKfycbwgqtEp_6RNtMDcopoerzdCdbi3bcZxW2AGA_vr5FqlCfrx0zfQ29k91Rjq4e5zhzw5/exec';
 
-  // โหลด feedbacks จาก localStorage + ดึง sales จาก Sheets ทุกครั้งที่เปิดเว็บ
+  // โหลด feedbacks + sales จาก Sheets ทุกครั้งที่เปิดเว็บ (localStorage เป็น fallback)
   useEffect(()=>{
-    const fd=storage.get('wss_feedbacks_v2');
     const ls=storage.get('wss_live_sales');
-    if(fd)setFeedbacks(JSON.parse(fd.value));
     if(ls)setLiveSales(JSON.parse(ls.value));
 
-    // ดึงข้อมูลยอดขายล่าสุดจาก Google Sheets
-    fetch(`${SHEETS_URL}?action=getSales`)
-      .then(r=>r.json())
-      .then(data=>{
-        if(data.status==='ok'&&data.sites?.length>0){
-          setLiveSales(data.sites);
-          storage.set('wss_live_sales',JSON.stringify(data.sites));
-        }
-      })
-      .catch(()=>{/* ใช้ข้อมูล localStorage แทน */})
-      .finally(()=>setLoading(false));
+    // ดึง feedbacks จาก sheet ALL + ยอดขายจาก SALES_DATA พร้อมกัน
+    Promise.all([
+      fetch(`${SHEETS_URL}?action=getFeedbacks`).then(r=>r.json()).catch(()=>null),
+      fetch(`${SHEETS_URL}?action=getSales`).then(r=>r.json()).catch(()=>null),
+    ]).then(([fbData,salesData])=>{
+      if(fbData?.status==='ok'&&fbData.feedbacks?.length>0){
+        setFeedbacks(fbData.feedbacks);
+        storage.set('wss_feedbacks_v2',JSON.stringify(fbData.feedbacks));
+      } else {
+        // fallback: ใช้ localStorage ถ้าดึง Sheets ไม่ได้
+        const fd=storage.get('wss_feedbacks_v2');
+        if(fd)setFeedbacks(JSON.parse(fd.value));
+      }
+      if(salesData?.status==='ok'&&salesData.sites?.length>0){
+        setLiveSales(salesData.sites);
+        storage.set('wss_live_sales',JSON.stringify(salesData.sites));
+      }
+    }).finally(()=>setLoading(false));
   },[]);
 
   const activeSites=liveSales||MASTER_SITES;
