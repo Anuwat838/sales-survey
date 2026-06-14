@@ -11,7 +11,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Sarabun','Prompt',sans-serif;background:#f1f5f9;min-height:100vh}
@@ -661,6 +661,262 @@ function DashboardPage({feedbacks,activeSites}){
 }
 
 // ============================================================
+// AS QUALITY DASHBOARD
+// ============================================================
+const MONTHS_TH=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+
+function parseWeekLabel(label){
+  // format: "D/M/YYYY - D/M/YYYY"
+  try{
+    const parts=label.split(' - ');
+    const [d,m,y]=parts[0].split('/').map(Number);
+    return new Date(y,m-1,d);
+  }catch{return null;}
+}
+
+function getWeekNumber(weekLabel,year,month){
+  // ดึงสัปดาห์ที่ 1-5 ของเดือน/ปีนั้น
+  const weeks=getWeeksOfMonth(year,month);
+  return weeks.findIndex(w=>w.label===weekLabel)+1;
+}
+
+function getWeeksOfMonth(year,month){
+  // หาสัปดาห์ทั้งหมดที่ตรงกับเดือน/ปี จาก feedbacks week format
+  const weeks=[];
+  const d=new Date(year,month,1);
+  // หาวันจันทร์แรกของเดือน
+  while(d.getMonth()===month){
+    const mon=new Date(d);
+    mon.setDate(d.getDate()-((d.getDay()+6)%7));
+    const sun=new Date(mon);sun.setDate(mon.getDate()+6);
+    const fmt=x=>`${x.getDate()}/${x.getMonth()+1}/${x.getFullYear()}`;
+    const label=`${fmt(mon)} - ${fmt(sun)}`;
+    if(!weeks.find(w=>w.label===label)){
+      // ตรวจว่า week นี้อยู่ในเดือนนั้นบางส่วน
+      const inMonth=(mon.getMonth()===month&&mon.getFullYear()===year)||(sun.getMonth()===month&&sun.getFullYear()===year);
+      if(inMonth) weeks.push({label,mon,sun,num:weeks.length+1});
+    }
+    d.setDate(d.getDate()+1);
+  }
+  return weeks;
+}
+
+function ASQualityPage({feedbacks,activeSites}){
+  const now=new Date();
+  const [selYear,setSelYear]=useState(now.getFullYear());
+  const [selMonth,setSelMonth]=useState(now.getMonth()); // 0-based
+  const [selWeek,setSelWeek]=useState('ALL'); // 'ALL' | label string
+  const [selRegion,setSelRegion]=useState(null); // null = ดูภาพรวม
+
+  const years=[...new Set([now.getFullYear()-1,now.getFullYear()])].sort();
+  const weeks=getWeeksOfMonth(selYear,selMonth);
+
+  // filter feedbacks ตาม year/month/week
+  const filtered=feedbacks.filter(f=>{
+    const d=parseWeekLabel(f.week);
+    if(!d) return false;
+    const fy=d.getFullYear();
+    const fm=d.getMonth();
+    if(fy!==selYear||fm!==selMonth) return false;
+    if(selWeek!=='ALL'&&f.week!==selWeek) return false;
+    return true;
+  });
+
+  // สาขาที่ active
+  const regions=[...new Set(activeSites.map(s=>s.region))].sort();
+
+  // คำนวณ weeks ที่ต้องส่ง (เฉพาะ weeks ที่ filter)
+  const targetWeeks=selWeek==='ALL'?weeks.map(w=>w.label):[selWeek];
+  const totalExpected=activeSites.length*targetWeeks.length;
+  const totalSent=filtered.length;
+  const rate=totalExpected>0?Math.round((totalSent/totalExpected)*100):0;
+
+  // AS ที่ครบ 100%
+  const allAS=[...new Set(activeSites.map(s=>s.as_code))];
+  const asSites={};
+  activeSites.forEach(s=>{
+    if(!asSites[s.as_code])asSites[s.as_code]=[];
+    asSites[s.as_code].push(s.site);
+  });
+  const asComplete=allAS.filter(as=>{
+    const sites=asSites[as]||[];
+    const expected=sites.length*targetWeeks.length;
+    const sent=filtered.filter(f=>f.as_code===as).length;
+    return expected>0&&sent>=expected;
+  });
+  const asZero=allAS.filter(as=>{
+    const sent=filtered.filter(f=>f.as_code===as).length;
+    return sent===0;
+  });
+
+  // Region stats
+  function getRegionStats(region){
+    const rs=activeSites.filter(s=>s.region===region);
+    const expected=rs.length*targetWeeks.length;
+    const sent=filtered.filter(f=>f.region===region).length;
+    const asInRegion=[...new Set(rs.map(s=>s.as_code))];
+    return{expected,sent,rate:expected>0?Math.round((sent/expected)*100):0,sites:rs.length,asCount:asInRegion.length};
+  }
+
+  // AS stats ใน region
+  function getASStats(region){
+    const rs=activeSites.filter(s=>s.region===region);
+    const asInRegion=[...new Set(rs.map(s=>s.as_code))].sort();
+    return asInRegion.map(as=>{
+      const sites=rs.filter(s=>s.as_code===as);
+      const expected=sites.length*targetWeeks.length;
+      const sent=filtered.filter(f=>f.as_code===as&&f.region===region).length;
+      const r=expected>0?Math.round((sent/expected)*100):0;
+      return{as_code:as,sites:sites.length,expected,sent,rate:r};
+    }).sort((a,b)=>b.rate-a.rate);
+  }
+
+  const REGION_COLORS={BANGKOK:'#378ADD',CENTRAL:'#1D9E75',NORTHEAST:'#7F77DD',NORTH:'#639922',SOUTH:'#D85A30'};
+
+  const cardS={background:'#fff',borderRadius:16,padding:'12px 14px',boxShadow:'0 2px 8px rgba(0,0,0,.06)'};
+  const metricS={background:'#f8fafc',borderRadius:10,padding:'12px 14px'};
+
+  function StatusPill({rate,expected}){
+    if(expected===0)return <span style={{fontSize:11,color:'#9ca3af'}}>—</span>;
+    if(rate===100)return <span style={{padding:'2px 9px',borderRadius:20,background:'#dcfce7',color:'#16a34a',fontSize:11,fontWeight:700}}>ครบ</span>;
+    if(rate===0)return <span style={{padding:'2px 9px',borderRadius:20,background:'#fee2e2',color:'#dc2626',fontSize:11,fontWeight:700}}>ไม่ส่งเลย</span>;
+    const missing=expected-Math.min(Math.round(rate/100*expected),expected);
+    return <span style={{padding:'2px 9px',borderRadius:20,background:'#fef3c7',color:'#d97706',fontSize:11,fontWeight:700}}>ขาด {missing}</span>;
+  }
+
+  return(
+    <div style={{maxWidth:1100,margin:'0 auto'}}>
+
+      {/* Filter bar */}
+      <div style={{display:'flex',alignItems:'center',gap:8,padding:'10px 14px',background:'#fff',borderRadius:12,marginBottom:16,flexWrap:'wrap',boxShadow:'0 1px 4px rgba(0,0,0,.06)'}}>
+        <span style={{fontSize:12,color:'#6b7280',fontWeight:600}}>📅 ปี</span>
+        <select value={selYear} onChange={e=>{setSelYear(Number(e.target.value));setSelWeek('ALL');}}
+          style={{fontSize:12,padding:'5px 10px',borderRadius:8,border:'1px solid #e5e7eb',background:'#f8fafc',color:'#111'}}>
+          {years.map(y=><option key={y} value={y}>{y}</option>)}
+        </select>
+        <span style={{fontSize:12,color:'#6b7280',fontWeight:600}}>เดือน</span>
+        <select value={selMonth} onChange={e=>{setSelMonth(Number(e.target.value));setSelWeek('ALL');}}
+          style={{fontSize:12,padding:'5px 10px',borderRadius:8,border:'1px solid #e5e7eb',background:'#f8fafc',color:'#111'}}>
+          {MONTHS_TH.map((m,i)=><option key={i} value={i}>{m}</option>)}
+        </select>
+        <div style={{width:1,height:20,background:'#e5e7eb',margin:'0 4px'}}/>
+        <span style={{fontSize:12,color:'#6b7280',fontWeight:600}}>สัปดาห์</span>
+        <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+          <button onClick={()=>setSelWeek('ALL')}
+            style={{padding:'3px 12px',borderRadius:20,fontSize:11,border:`1.5px solid ${selWeek==='ALL'?'#3b82f6':'#e5e7eb'}`,background:selWeek==='ALL'?'#eff6ff':'#fff',color:selWeek==='ALL'?'#1d4ed8':'#6b7280',fontWeight:selWeek==='ALL'?700:400,cursor:'pointer'}}>
+            ทั้งเดือน
+          </button>
+          {weeks.map((w,i)=>(
+            <button key={w.label} onClick={()=>setSelWeek(w.label)}
+              style={{padding:'3px 12px',borderRadius:20,fontSize:11,border:`1.5px solid ${selWeek===w.label?'#3b82f6':'#e5e7eb'}`,background:selWeek===w.label?'#eff6ff':'#fff',color:selWeek===w.label?'#1d4ed8':'#6b7280',fontWeight:selWeek===w.label?700:400,cursor:'pointer'}}>
+              W{i+1} {w.mon.getDate()}/{w.mon.getMonth()+1}–{w.sun.getDate()}/{w.sun.getMonth()+1}
+            </button>
+          ))}
+          {weeks.length===0&&<span style={{fontSize:11,color:'#9ca3af'}}>ไม่มีข้อมูลสัปดาห์</span>}
+        </div>
+      </div>
+
+      {/* Summary cards */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:16}}>
+        {[
+          {label:'ส่ง Feedback แล้ว',val:`${totalSent}`,sub:`จาก ${totalExpected} รายการ`},
+          {label:'Submission Rate',val:`${rate}%`,sub:`${MONTHS_TH[selMonth]} ${selYear}${selWeek!=='ALL'?' · '+weeks.find(w=>w.label===selWeek)?.num?`W${weeks.find(w=>w.label===selWeek)?.num}`:'':''}`},
+          {label:'AS ที่ครบ 100%',val:`${asComplete.length} / ${allAS.length}`,sub:'AS Codes ทั้งหมด'},
+          {label:'AS ที่ยังไม่ส่งเลย',val:`${asZero.length}`,sub:'ต้องติดตาม',danger:asZero.length>0},
+        ].map((m,i)=>(
+          <div key={i} style={metricS}>
+            <div style={{fontSize:11,color:'#6b7280',marginBottom:5}}>{m.label}</div>
+            <div style={{fontSize:22,fontWeight:700,color:m.danger?'#dc2626':'#0f172a'}}>{m.val}</div>
+            <div style={{fontSize:11,color:'#9ca3af',marginTop:2}}>{m.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Region overview / drill-down */}
+      {!selRegion?(
+        <>
+          <div style={{fontSize:13,fontWeight:700,color:'#374151',marginBottom:8}}>ภาพรวมรายภาค — คลิกเพื่อดูรายละเอียด AS</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
+            {regions.map(r=>{
+              const s=getRegionStats(r);
+              const col=REGION_COLORS[r]||'#64748b';
+              return(
+                <div key={r} onClick={()=>setSelRegion(r)}
+                  style={{...cardS,cursor:'pointer',borderLeft:`4px solid ${col}`,transition:'box-shadow .15s'}}
+                  onMouseEnter={e=>e.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,.12)'}
+                  onMouseLeave={e=>e.currentTarget.style.boxShadow='0 2px 8px rgba(0,0,0,.06)'}>
+                  <div style={{fontSize:12,fontWeight:700,color:'#0f172a',marginBottom:8}}>📍 {r}</div>
+                  <div style={{display:'flex',gap:16,marginBottom:8}}>
+                    <div style={{fontSize:11,color:'#6b7280'}}>สาขา<span style={{display:'block',fontSize:16,fontWeight:700,color:'#0f172a'}}>{s.sent}/{s.expected}</span></div>
+                    <div style={{fontSize:11,color:'#6b7280'}}>Rate<span style={{display:'block',fontSize:16,fontWeight:700,color:s.rate>=80?'#16a34a':s.rate>=50?'#d97706':'#dc2626'}}>{s.rate}%</span></div>
+                    <div style={{fontSize:11,color:'#6b7280'}}>AS<span style={{display:'block',fontSize:16,fontWeight:700,color:'#0f172a'}}>{s.asCount}</span></div>
+                  </div>
+                  <div style={{height:5,borderRadius:3,background:'#f1f5f9',overflow:'hidden'}}>
+                    <div style={{height:'100%',width:`${Math.min(s.rate,100)}%`,background:col,borderRadius:3,transition:'width .3s'}}/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ):(
+        <>
+          {/* Drill-down: AS table */}
+          <div style={cardS}>
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
+              <button onClick={()=>setSelRegion(null)}
+                style={{display:'flex',alignItems:'center',gap:4,padding:'5px 12px',borderRadius:8,border:'1px solid #e5e7eb',background:'#f8fafc',color:'#374151',fontSize:12,fontWeight:600,cursor:'pointer'}}>
+                ← ย้อนกลับ
+              </button>
+              <span style={{fontSize:14,fontWeight:700,color:'#0f172a'}}>📍 {selRegion} — รายละเอียด AS</span>
+              <span style={{fontSize:11,color:'#9ca3af',marginLeft:'auto'}}>
+                {getASStats(selRegion).length} AS · {activeSites.filter(s=>s.region===selRegion).length} สาขา
+                {selWeek!=='ALL'?' · '+selWeek:''}
+              </span>
+            </div>
+            <div style={{overflowX:'auto'}}>
+              <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+                <thead>
+                  <tr style={{background:'#f8fafc'}}>
+                    {['AS Code','สาขาทั้งหมด','รายการที่ต้องส่ง','ส่งแล้ว','Rate','Progress','สถานะ'].map(h=>(
+                      <th key={h} style={{padding:'7px 10px',textAlign:'left',fontSize:11,fontWeight:700,color:'#6b7280',borderBottom:'1px solid #f1f5f9',whiteSpace:'nowrap'}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {getASStats(selRegion).map((a,i)=>(
+                    <tr key={a.as_code} style={{borderBottom:'1px solid #f8fafc',background:i%2===0?'#fff':'#fafafa'}}>
+                      <td style={{padding:'8px 10px'}}>
+                        <span style={{padding:'2px 8px',borderRadius:6,background:'#eff6ff',color:'#1d4ed8',fontSize:11,fontWeight:700}}>{a.as_code}</span>
+                      </td>
+                      <td style={{padding:'8px 10px',color:'#374151'}}>{a.sites}</td>
+                      <td style={{padding:'8px 10px',color:'#374151'}}>{a.expected}</td>
+                      <td style={{padding:'8px 10px',fontWeight:700,color:'#0f172a'}}>{a.sent}</td>
+                      <td style={{padding:'8px 10px',fontWeight:700,color:a.rate>=80?'#16a34a':a.rate>=50?'#d97706':'#dc2626'}}>{a.rate}%</td>
+                      <td style={{padding:'8px 10px',minWidth:120}}>
+                        <div style={{display:'flex',alignItems:'center',gap:8}}>
+                          <div style={{flex:1,height:5,borderRadius:3,background:'#f1f5f9',overflow:'hidden'}}>
+                            <div style={{height:'100%',width:`${Math.min(a.rate,100)}%`,background:a.rate>=80?'#22c55e':a.rate>=50?'#f59e0b':'#ef4444',borderRadius:3}}/>
+                          </div>
+                          <span style={{fontSize:11,color:'#9ca3af',minWidth:32}}>{a.sent}/{a.expected}</span>
+                        </div>
+                      </td>
+                      <td style={{padding:'8px 10px'}}>
+                        <StatusPill rate={a.rate} expected={a.expected}/>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
 // HISTORY
 // ============================================================
 function HistoryPage({feedbacks,activeSites}){
@@ -726,380 +982,7 @@ function HistoryPage({feedbacks,activeSites}){
 // ============================================================
 // SETUP SHEETS
 // ============================================================
-function SetupPage({sheetsUrl,onSaveUrl}){
-  const [url,setUrl]=useState(sheetsUrl||'');
-  const [saved,setSaved]=useState(false);
 
-  const code=`function doPost(e) {
-  try {
-    const data = JSON.parse(e.postData.contents);
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-    appendRow(ss, "ALL", [
-      data.submittedAt, data.week, data.region, data.as_code, data.site,
-      data.submitterName, (data.issues||[]).join(", "), data.overallComment,
-      data.catSituations?.REF, data.catComments?.REF, data.sales?.REF?.sell, data.sales?.REF?.target,
-      data.catSituations?.WM, data.catComments?.WM, data.sales?.WM?.sell, data.sales?.WM?.target,
-      data.catSituations?.AC, data.catComments?.AC, data.sales?.AC?.sell, data.sales?.AC?.target,
-    ]);
-
-    ["REF","WM","AC"].forEach(cat => {
-      appendRow(ss, cat, [
-        data.submittedAt, data.week, data.region, data.as_code, data.site,
-        data.submitterName, data.catSituations?.[cat], data.catComments?.[cat],
-        data.sales?.[cat]?.sell, data.sales?.[cat]?.target,
-        (data.issues||[]).join(", "),
-      ]);
-    });
-
-    return ContentService.createTextOutput(JSON.stringify({status:"ok"}))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch(err) {
-    return ContentService.createTextOutput(JSON.stringify({status:"error",msg:err.message}))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-function appendRow(ss, sheetName, row) {
-  let sheet = ss.getSheetByName(sheetName);
-  if (!sheet) {
-    sheet = ss.insertSheet(sheetName);
-    const headers = {
-      ALL: ["Timestamp","Week","Region","AS Code","Site","รหัสพนักงาน","ปัญหา","ความเห็นรวม",
-            "REF Situation","REF Comment","REF Sell","REF Target",
-            "WM Situation","WM Comment","WM Sell","WM Target",
-            "AC Situation","AC Comment","AC Sell","AC Target"],
-      REF: ["Timestamp","Week","Region","AS Code","Site","รหัสพนักงาน","Situation","Comment","Sell","Target","ปัญหา"],
-      WM:  ["Timestamp","Week","Region","AS Code","Site","รหัสพนักงาน","Situation","Comment","Sell","Target","ปัญหา"],
-      AC:  ["Timestamp","Week","Region","AS Code","Site","รหัสพนักงาน","Situation","Comment","Sell","Target","ปัญหา"],
-    };
-    sheet.appendRow(headers[sheetName]||["Data"]);
-    sheet.getRange(1,1,1,sheet.getLastColumn())
-      .setBackground("#1e293b").setFontColor("#ffffff").setFontWeight("bold");
-  }
-  sheet.appendRow(row);
-}`;
-
-  return(<div style={{maxWidth:720,margin:'0 auto'}}>
-    {saved&&<div style={{padding:'14px 18px',borderRadius:12,background:'#dcfce7',border:'1px solid #86efac',color:'#16a34a',fontWeight:600,marginBottom:20}}>✓ บันทึก URL แล้ว!</div>}
-    <div style={card}>
-      <h3 style={{margin:'0 0 6px',fontSize:18,fontWeight:700}}>เชื่อมต่อ Google Sheets</h3>
-      <p style={{margin:'0 0 20px',color:'#6b7280',fontSize:14}}>ทำตาม 3 ขั้นตอน แล้ว Feedback จะส่งเข้า Google Sheets อัตโนมัติ</p>
-      {[
-        {n:'1',t:'สร้าง Google Sheet ใหม่',d:'เปิด sheets.google.com → สร้าง Spreadsheet ใหม่'},
-        {n:'2',t:'เพิ่ม Apps Script',d:'Extensions → Apps Script → ลบ code เดิม → วาง code ด้านล่าง → กด Save (Ctrl+S)'},
-        {n:'3',t:'Deploy Web App',d:'Deploy → New deployment → Type: Web app\nExecute as: Me | Who has access: Anyone\nคลิก Deploy → Copy URL'},
-      ].map(({n,t,d})=>(
-        <div key={n} style={{display:'flex',gap:14,marginBottom:20}}>
-          <div style={{width:32,height:32,borderRadius:'50%',background:'#1e293b',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontWeight:700,flexShrink:0}}>{n}</div>
-          <div><div style={{fontWeight:700,fontSize:14,marginBottom:4}}>{t}</div><div style={{fontSize:13,color:'#6b7280',whiteSpace:'pre-line'}}>{d}</div></div>
-        </div>
-      ))}
-
-      <div style={{background:'#0f172a',borderRadius:10,padding:'14px 16px',marginBottom:20}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
-          <span style={{fontSize:11,color:'#64748b',fontWeight:700,fontFamily:'monospace'}}>Apps Script Code</span>
-          <button onClick={()=>navigator.clipboard.writeText(code).then(()=>alert('คัดลอกแล้ว!'))}
-            style={{padding:'4px 12px',borderRadius:6,border:'1px solid #334155',background:'transparent',color:'#94a3b8',fontSize:11,cursor:'pointer'}}>
-            📋 Copy
-          </button>
-        </div>
-        <pre style={{margin:0,fontSize:11,color:'#e2e8f0',fontFamily:'monospace',whiteSpace:'pre-wrap',lineHeight:1.6,maxHeight:200,overflow:'auto'}}>{code}</pre>
-      </div>
-
-      <label style={lbl}>วาง Web App URL ที่ได้จาก Deploy</label>
-      <input value={url} onChange={e=>setUrl(e.target.value)} placeholder='https://script.google.com/macros/s/.../exec' style={{...inp,marginBottom:12}}/>
-      <button onClick={async()=>{await onSaveUrl(url);setSaved(true);setTimeout(()=>setSaved(false),3000);}}
-        disabled={!url.includes('script.google.com')}
-        style={btn(!url.includes('script.google.com')?'#e5e7eb':'#16a34a',!url.includes('script.google.com'))}>
-        บันทึกและเชื่อมต่อ Google Sheets
-      </button>
-      {sheetsUrl&&<p style={{margin:'10px 0 0',fontSize:12,color:'#6b7280'}}>✓ เชื่อมต่ออยู่แล้ว</p>}
-    </div>
-  </div>);
-}
-
-// ============================================================
-// PASSCODE LOCK
-// ============================================================
-const ADMIN_PASSCODE = '1234'; // ← เปลี่ยน passcode ที่นี่ได้เลยครับ
-
-function PasscodeLock({onUnlock,title}){
-  const [input,setInput]=useState('');
-  const [error,setError]=useState(false);
-  const [shake,setShake]=useState(false);
-
-  function handleKey(k){
-    if(input.length>=6)return;
-    const next=input+k;
-    setInput(next);
-    setError(false);
-    if(next.length===ADMIN_PASSCODE.length){
-      if(next===ADMIN_PASSCODE){
-        onUnlock();
-      } else {
-        setShake(true);
-        setError(true);
-        setTimeout(()=>{setInput('');setShake(false);},600);
-      }
-    }
-  }
-
-  function handleDel(){setInput(p=>p.slice(0,-1));setError(false);}
-
-  const keys=['1','2','3','4','5','6','7','8','9','','0','⌫'];
-
-  return(
-    <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'60vh'}}>
-      <div style={{background:'#fff',borderRadius:20,padding:'36px 32px',boxShadow:'0 8px 40px rgba(0,0,0,.12)',textAlign:'center',width:300}}>
-        <div style={{fontSize:32,marginBottom:8}}>🔒</div>
-        <h3 style={{margin:'0 0 4px',fontSize:18,fontWeight:700,color:'#111'}}>{title}</h3>
-        <p style={{margin:'0 0 24px',fontSize:13,color:'#9ca3af'}}>กรอก Passcode เพื่อเข้าใช้งาน</p>
-
-        {/* Dots */}
-        <div style={{display:'flex',justifyContent:'center',gap:12,marginBottom:28,
-          animation:shake?'shake .4s ease':'none'}}>
-          {Array.from({length:ADMIN_PASSCODE.length}).map((_,i)=>(
-            <div key={i} style={{width:14,height:14,borderRadius:'50%',
-              background:i<input.length?(error?'#ef4444':'#1e293b'):'#e5e7eb',
-              transition:'background .15s'}}/>
-          ))}
-        </div>
-
-        {/* Keypad */}
-        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
-          {keys.map((k,i)=>(
-            <button key={i} onClick={()=>k==='⌫'?handleDel():k?handleKey(k):null}
-              disabled={!k}
-              style={{padding:'16px 0',borderRadius:12,border:'none',
-                background:k?'#f1f5f9':'transparent',
-                color:k==='⌫'?'#ef4444':'#1e293b',
-                fontSize:k==='⌫'?20:20,fontWeight:700,cursor:k?'pointer':'default',
-                transition:'all .1s',opacity:k?1:0}}>
-              {k}
-            </button>
-          ))}
-        </div>
-
-        {error&&<p style={{margin:'16px 0 0',fontSize:13,color:'#ef4444',fontWeight:600}}>Passcode ไม่ถูกต้อง</p>}
-      </div>
-      <style>{`@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-8px)}80%{transform:translateX(4px)}}`}</style>
-    </div>
-  );
-}
-
-// ============================================================
-// ADMIN PAGE — อัพโหลด Excel/CSV อัพเดตยอดขาย
-// ============================================================
-function AdminPage({onUpdateSales}){
-  const [preview,setPreview]=useState(null);
-  const [errors,setErrors]=useState([]);
-  const [saved,setSaved]=useState(false);
-  const [dragging,setDragging]=useState(false);
-  const fileRef=useRef(null);
-
-  // คอลัมน์ที่ต้องการจาก Excel (ตรงกับ BIG_C format)
-  // Region | AS codename | Site Name | REF Sell Out | REF Target | ... | WM Sell Out | WM Target | ... | AC Sell Out | AC Target
-  function parseWorkbook(wb){
-    const ws=wb.Sheets[wb.SheetNames[0]];
-    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-    if(rows.length<2){setErrors(['ไม่พบข้อมูลในไฟล์']);return;}
-
-    const header=rows[0].map(h=>String(h).trim());
-    // หา index คอลัมน์
-    const findCol=(keywords)=>{
-      const idx=header.findIndex(h=>keywords.some(k=>h.toLowerCase().includes(k.toLowerCase())));
-      return idx;
-    };
-    const iRegion=findCol(['region']);
-    const iAS=findCol(['as code','as codename','codename']);
-    const iAccount=findCol(['account']);
-    const iSite=findCol(['site name','site']);
-    const iREFSell=findCol(['ref sell','ref so']);
-    const iREFTarget=findCol(['ref target']);
-    const iWMSell=findCol(['wm sell','wm so']);
-    const iWMTarget=findCol(['wm target']);
-    const iACSell=findCol(['ac sell','ac so']);
-    const iACTarget=findCol(['ac target']);
-    const iPCStatus=findCol(['pc status','status']);
-
-    const errs=[];
-    if(iRegion<0)errs.push('ไม่พบคอลัมน์ Region');
-    if(iSite<0)errs.push('ไม่พบคอลัมน์ Site Name');
-    if(iREFSell<0)errs.push('ไม่พบคอลัมน์ REF Sell Out');
-    if(errs.length){setErrors(errs);return;}
-
-    const parsed=[];
-    rows.slice(1).forEach((row,i)=>{
-      const region=String(row[iRegion]||'').trim();
-      const as_code=String(row[iAS]||'').trim();
-      const account=String(row[iAccount]||'').trim()||'Unknown';
-      const site=String(row[iSite]||'').trim();
-      if(!region||!site||region==='NA')return;
-      parsed.push({
-        region, as_code, account, site,
-        REF:{sell:Number(row[iREFSell])||0, target:Number(row[iREFTarget])||0},
-        WM:{sell:Number(row[iWMSell])||0, target:Number(row[iWMTarget])||0},
-        AC:{sell:Number(row[iACSell])||0, target:Number(row[iACTarget])||0},
-        pc_status:String(row[iPCStatus]||'').trim(),
-      });
-    });
-
-    if(parsed.length===0){setErrors(['ไม่พบข้อมูลสาขา ตรวจสอบชื่อคอลัมน์ครับ']);return;}
-    setErrors([]);
-    setPreview(parsed);
-  }
-
-  function handleFile(file){
-    if(!file)return;
-    const ext=file.name.split('.').pop().toLowerCase();
-    if(!['xlsx','xls','csv'].includes(ext)){setErrors(['รองรับเฉพาะ .xlsx, .xls, .csv เท่านั้น']);return;}
-    const reader=new FileReader();
-    reader.onload=e=>{
-      try{
-        const wb=XLSX.read(e.target.result,{type:'array'});
-        parseWorkbook(wb);
-      }catch(err){setErrors(['อ่านไฟล์ไม่สำเร็จ: '+err.message]);}
-    };
-    reader.readAsArrayBuffer(file);
-  }
-
-  function handleDrop(e){
-    e.preventDefault();setDragging(false);
-    handleFile(e.dataTransfer.files[0]);
-  }
-
-  const [syncing,setSyncing]=useState(false);
-
-  async function confirmUpdate(){
-    setSyncing(true);
-    await onUpdateSales(preview);
-    setSyncing(false);
-    setSaved(true);
-    setPreview(null);
-    setTimeout(()=>setSaved(false),4000);
-  }
-
-  const regions=[...new Set((preview||[]).map(s=>s.region))];
-  const totalSites=(preview||[]).length;
-
-  return(<div style={{maxWidth:760,margin:'0 auto'}}>
-    {saved&&(
-      <div style={{padding:'16px 20px',borderRadius:12,background:'#dcfce7',border:'1px solid #86efac',color:'#16a34a',fontWeight:700,marginBottom:20,fontSize:15}}>
-        ✓ อัพเดตยอดขายสำเร็จ! {totalSites} สาขา — ระบบใช้ข้อมูลใหม่ทันที
-      </div>
-    )}
-
-    {/* Upload Zone */}
-    <div style={card}>
-      <h3 style={{margin:'0 0 4px',fontSize:18,fontWeight:700}}>📤 อัพโหลดไฟล์ยอดขาย</h3>
-      <p style={{margin:'0 0 20px',color:'#6b7280',fontSize:13}}>รองรับ .xlsx / .xls / .csv · โครงสร้างเดิมจาก BIG_C_APR_2026.xlsx</p>
-
-      {/* Drop Zone */}
-      <div
-        onDragOver={e=>{e.preventDefault();setDragging(true);}}
-        onDragLeave={()=>setDragging(false)}
-        onDrop={handleDrop}
-        onClick={()=>fileRef.current.click()}
-        style={{border:`2px dashed ${dragging?'#3b82f6':'#cbd5e1'}`,borderRadius:14,padding:'40px 20px',textAlign:'center',cursor:'pointer',background:dragging?'#eff6ff':'#f8fafc',transition:'all .2s',marginBottom:16}}>
-        <div style={{fontSize:40,marginBottom:12}}>📁</div>
-        <div style={{fontWeight:700,fontSize:15,color:'#1e293b',marginBottom:6}}>ลากไฟล์มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์</div>
-        <div style={{fontSize:12,color:'#94a3b8'}}>.xlsx · .xls · .csv</div>
-        <input ref={fileRef} type='file' accept='.xlsx,.xls,.csv' style={{display:'none'}} onChange={e=>handleFile(e.target.files[0])}/>
-      </div>
-
-      {/* รูปแบบคอลัมน์ที่ต้องการ */}
-      <div style={{padding:'12px 16px',borderRadius:10,background:'#f1f5f9',fontSize:12,color:'#475569'}}>
-        <div style={{fontWeight:700,marginBottom:6}}>📋 คอลัมน์ที่ต้องมีในไฟล์</div>
-        <div style={{display:'flex',flexWrap:'wrap',gap:'6px 16px'}}>
-          {['Region','AS codename','Account','Site Name','REF Sell Out','REF Target','WM Sell Out','WM Target','AC Sell Out','AC Target','PC Status'].map(c=>(
-            <span key={c} style={{padding:'2px 8px',borderRadius:8,background:'#e2e8f0',fontFamily:'monospace',fontSize:11}}>{c}</span>
-          ))}
-        </div>
-      </div>
-
-      {/* Errors */}
-      {errors.length>0&&(
-        <div style={{marginTop:14,padding:'12px 16px',borderRadius:10,background:'#fef2f2',border:'1px solid #fecaca',color:'#dc2626',fontSize:13}}>
-          {errors.map((e,i)=><div key={i}>⚠️ {e}</div>)}
-        </div>
-      )}
-    </div>
-
-    {/* Preview */}
-    {preview&&(
-      <div style={{...card,marginTop:16}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,flexWrap:'wrap',gap:10}}>
-          <div>
-            <h4 style={{margin:0,fontSize:16,fontWeight:700}}>ตัวอย่างข้อมูลที่จะอัพเดต</h4>
-            <p style={{margin:'4px 0 0',fontSize:13,color:'#6b7280'}}>{totalSites} สาขา · {regions.length} Region</p>
-          </div>
-          <div style={{display:'flex',gap:10}}>
-            <button onClick={()=>{setPreview(null);setErrors([]);}}
-              style={{padding:'10px 18px',borderRadius:10,border:'2px solid #e5e7eb',background:'#fff',color:'#6b7280',fontWeight:600,cursor:'pointer',fontSize:13}}>
-              ยกเลิก
-            </button>
-            <button onClick={confirmUpdate} disabled={syncing}
-              style={{padding:'10px 22px',borderRadius:10,border:'none',background:syncing?'#6b7280':'linear-gradient(135deg,#16a34a,#15803d)',color:'#fff',fontWeight:700,cursor:syncing?'not-allowed':'pointer',fontSize:14}}>
-              {syncing?'⏳ กำลัง Sync...':'✓ ยืนยันอัพเดต '+totalSites+' สาขา'}
-            </button>
-          </div>
-        </div>
-
-        {/* Summary by Region */}
-        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>
-          {regions.map(r=>{
-            const cnt=preview.filter(s=>s.region===r).length;
-            return(<span key={r} style={{padding:'4px 12px',borderRadius:20,background:'#1e293b',color:'#fff',fontSize:12,fontWeight:600}}>
-              {r}: {cnt} sites
-            </span>);
-          })}
-        </div>
-
-        {/* Table preview */}
-        <div style={{overflowX:'auto',borderRadius:10,border:'1px solid #e5e7eb'}}>
-          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-            <thead>
-              <tr style={{background:'#f8fafc'}}>
-                {['Region','AS Code','Account','Site','REF Sell','REF Target','WM Sell','WM Target','AC Sell','AC Target','Status'].map(h=>(
-                  <th key={h} style={{padding:'8px 12px',textAlign:'left',fontWeight:700,color:'#6b7280',borderBottom:'1px solid #e5e7eb',whiteSpace:'nowrap',fontSize:11}}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {preview.slice(0,15).map((row,i)=>(
-                <tr key={i} style={{borderBottom:'1px solid #f1f5f9'}}>
-                  <td style={{padding:'8px 12px',color:'#6b7280'}}>{row.region}</td>
-                  <td style={{padding:'8px 12px',color:'#6b7280'}}>{row.as_code}</td>
-                  <td style={{padding:'8px 12px'}}>
-                    <span style={{padding:'2px 8px',borderRadius:8,background:'#eff6ff',color:'#3b82f6',fontSize:11,fontWeight:700}}>{row.account||'-'}</span>
-                  </td>
-                  <td style={{padding:'8px 12px',fontWeight:600,color:'#111',maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{row.site}</td>
-                  <td style={{padding:'8px 12px',color:'#3b82f6',fontWeight:600}}>{fmtB(row.REF.sell)}</td>
-                  <td style={{padding:'8px 12px',color:'#6b7280'}}>{fmtB(row.REF.target)}</td>
-                  <td style={{padding:'8px 12px',color:'#8b5cf6',fontWeight:600}}>{fmtB(row.WM.sell)}</td>
-                  <td style={{padding:'8px 12px',color:'#6b7280'}}>{fmtB(row.WM.target)}</td>
-                  <td style={{padding:'8px 12px',color:'#f59e0b',fontWeight:600}}>{fmtB(row.AC.sell)}</td>
-                  <td style={{padding:'8px 12px',color:'#6b7280'}}>{fmtB(row.AC.target)}</td>
-                  <td style={{padding:'8px 12px'}}>
-                    <span style={{padding:'2px 8px',borderRadius:12,background:row.pc_status==='WORKING'?'#dcfce7':'#fef3c7',color:row.pc_status==='WORKING'?'#16a34a':'#d97706',fontSize:10,fontWeight:700}}>
-                      {row.pc_status||'-'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {preview.length>15&&(
-            <div style={{padding:'10px 14px',textAlign:'center',color:'#9ca3af',fontSize:12,background:'#f8fafc'}}>
-              ...และอีก {preview.length-15} สาขา
-            </div>
-          )}
-        </div>
-      </div>
-    )}
-  </div>);
-}
 
 // ============================================================
 // PERFORMANCE PAGE
@@ -1447,10 +1330,9 @@ function PerformancePage({feedbacks,activeSites,onNavigate,preSelect}){
 function App(){
   const [page,setPage]=useState('performance');
   const [feedbacks,setFeedbacks]=useState([]);
-  const [sheetsUrl,setSheetsUrl]=useState('');
+  const [sheetsUrl] = useState(true); // hardcoded — always connected
   const [liveSales,setLiveSales]=useState(null);
   const [loading,setLoading]=useState(true);
-  const [unlocked,setUnlocked]=useState(false);
   const [surveyPreSelect,setSurveyPreSelect]=useState(null);
 
   const SHEETS_URL='https://script.google.com/macros/s/AKfycbwgqtEp_6RNtMDcopoerzdCdbi3bcZxW2AGA_vr5FqlCfrx0zfQ29k91Rjq4e5zhzw5/exec';
@@ -1477,30 +1359,6 @@ function App(){
 
   const activeSites=liveSales||MASTER_SITES;
 
-  const handleUpdateSales=useCallback(async(newSites)=>{
-    setLiveSales(newSites);
-    storage.set('wss_live_sales',JSON.stringify(newSites));
-
-    // ส่งทีละ 30 สาขา เพราะ GET URL มีขีดจำกัดความยาว
-    const BATCH=30;
-    const total=Math.ceil(newSites.length/BATCH);
-    try{
-      for(let i=0;i<total;i++){
-        const batch=newSites.slice(i*BATCH,(i+1)*BATCH);
-        const payload={
-          action:'updateSales',
-          batch:i,
-          totalBatch:total,
-          sites:batch,
-          updatedAt:new Date().toISOString()
-        };
-        const encoded=encodeURIComponent(JSON.stringify(payload));
-        await fetch(`${SHEETS_URL}?data=${encoded}`,{method:'GET',mode:'no-cors'});
-        // หน่วงเวลาเล็กน้อยระหว่าง batch
-        await new Promise(r=>setTimeout(r,500));
-      }
-    }catch(e){console.warn('Sync sales failed:',e);}
-  },[]);
 
   const handleSubmit=useCallback(async(fb)=>{
     const updated=[...feedbacks,fb];
@@ -1512,15 +1370,7 @@ function App(){
     }catch(e){console.warn('Sheets sync failed:',e);}
   },[feedbacks]);
 
-  const handleSaveUrl=useCallback(async(url)=>{
-    setSheetsUrl(url);
-    storage.set('wss_sheets_url',JSON.stringify(url));
-  },[]);
-
-  const PROTECTED=['admin','setup'];
   function handleNav(id,preSelect=null){
-    if(PROTECTED.includes(id)&&!unlocked) setUnlocked(false);
-    if(PROTECTED.includes(page)&&!PROTECTED.includes(id)) setUnlocked(false);
     setSurveyPreSelect(preSelect);
     setPage(id);
   }
@@ -1530,9 +1380,8 @@ function App(){
     {id:'performance',label:'Performance',icon:'📈'},
     {id:'survey',label:'Survey',icon:'📋'},
     {id:'dashboard',label:'Dashboard',icon:'📊'},
+    {id:'as-quality',label:'AS Quality',icon:'🏆'},
     {id:'history',label:'ประวัติ',icon:'🕐'},
-    {id:'admin',label:'Admin',icon:'📤',lock:true},
-    {id:'setup',label:'Setup Sheets',icon:'⚙️',lock:true,dot:false},
   ];
 
   if(loading)return(
@@ -1570,7 +1419,7 @@ function App(){
       </div>
 
       <div style={{maxWidth:1100,margin:'0 auto',padding:'24px 20px'}}>
-        {pending>0&&page!=='setup'&&page!=='admin'&&(
+        {pending>0&&(
           <div style={{padding:'11px 16px',borderRadius:12,background:'#fffbeb',border:'1px solid #fbbf24',color:'#92400e',fontSize:13,fontWeight:500,marginBottom:18}}>
             ⚠️ ยังมี <strong>{pending} สาขา</strong> ที่ยังไม่ได้ส่ง Feedback สัปดาห์นี้
           </div>
@@ -1578,15 +1427,9 @@ function App(){
         {page==='survey'&&<SurveyPage feedbacks={feedbacks} onSubmit={handleSubmit} sheetsUrl={sheetsUrl} activeSites={activeSites} preSelect={surveyPreSelect} onNavigate={handleNav}/>}
         {page==='dashboard'&&<DashboardPage feedbacks={feedbacks} activeSites={activeSites}/>}
         {page==='performance'&&<PerformancePage feedbacks={feedbacks} activeSites={activeSites} onNavigate={handleNav} preSelect={surveyPreSelect}/>}
+        {page==='as-quality'&&<ASQualityPage feedbacks={feedbacks} activeSites={activeSites}/>}
         {page==='history'&&<HistoryPage feedbacks={feedbacks} activeSites={activeSites}/>}
-        {page==='admin'&&(!unlocked
-          ?<PasscodeLock title='Admin — อัพโหลดยอดขาย' onUnlock={()=>setUnlocked(true)}/>
-          :<AdminPage onUpdateSales={handleUpdateSales}/>
-        )}
-        {page==='setup'&&(!unlocked
-          ?<PasscodeLock title='Setup Google Sheets' onUnlock={()=>setUnlocked(true)}/>
-          :<SetupPage sheetsUrl={sheetsUrl} onSaveUrl={handleSaveUrl}/>
-        )}
+
       </div>
     </div>
   );
