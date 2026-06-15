@@ -725,16 +725,18 @@ function ASQualityPage({feedbacks,activeSites}){
   // สาขาที่ active
   const regions=[...new Set(activeSites.map(s=>s.region))].sort();
 
-  // คำนวณ weeks ที่ filter
+  // คำนวณ weeks ที่ต้องส่ง (เฉพาะ weeks ที่ filter)
   const targetWeeks=selWeeks.length>0?selWeeks:weeks.map(w=>w.label);
 
-  // นับ unique site ที่ส่ง feedback โดย as_code นั้น
+  // นับ unique site ที่ส่ง feedback (dedup ด้วย site+week)
   function countSentSites(fbList,siteList){
-    // match เฉพาะ as_code — ไม่เช็คชื่อสาขากับ SALES_DATA เพราะชื่ออาจสะกดต่างกัน
-    const asCodes=new Set(siteList.map(s=>s.as_code));
-    const relevantFb=fbList.filter(f=>asCodes.has(f.as_code));
-    // นับ unique site ที่ส่งมาจริงใน Sheet ALL
-    return new Set(relevantFb.map(f=>f.site)).size;
+    const sentKeys=new Set(fbList.map(f=>`${f.site}|${f.week}`));
+    let count=0;
+    siteList.forEach(s=>{
+      const hasSent=targetWeeks.some(w=>sentKeys.has(`${s.site}|${w}`));
+      if(hasSent) count++;
+    });
+    return count;
   }
 
   const totalExpected=activeSites.length;
@@ -1358,7 +1360,7 @@ function App(){
 
     // ดึง feedbacks จาก sheet ALL + ยอดขายจาก SALES_DATA พร้อมกัน
     Promise.all([
-      fetch(SHEETS_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getFeedbacks'})}).then(r=>r.json()).catch(()=>null),
+      fetch(`${SHEETS_URL}?action=getFeedbacks`).then(r=>r.json()).catch(()=>null),
       fetch(`${SHEETS_URL}?action=getSales`).then(r=>r.json()).catch(()=>null),
     ]).then(([fbData,salesData])=>{
       if(fbData?.status==='ok'&&fbData.feedbacks?.length>0){
