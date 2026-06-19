@@ -29,7 +29,8 @@
   useState,
   useEffect,
   useCallback,
-  useRef
+  useRef,
+  useMemo
 } = React;
 
 // ============================================================
@@ -3655,17 +3656,86 @@ const TODAY = new Date().toLocaleDateString('th-TH', {
 });
 const fmtB = n => '฿' + Number(n).toLocaleString('th-TH');
 const achPct = (s, t) => t ? Math.round(s / t * 100) : 0;
-const CATS = ['REF', 'WM', 'AC'];
+const CATS = ['REF', 'WM', 'AC', 'AV', 'SD'];
 const CAT_COLORS = {
   REF: '#3b82f6',
   WM: '#8b5cf6',
-  AC: '#f59e0b'
+  AC: '#f59e0b',
+  AV: '#10b981',
+  SD: '#ec4899'
 };
 const CAT_LABELS = {
   REF: 'ตู้เย็น',
   WM: 'เครื่องซักผ้า',
-  AC: 'แอร์'
+  AC: 'แอร์',
+  AV: 'AV',
+  SD: 'SD'
 };
+const CAT_COLORS_DARK = {
+  REF: '#185FA5',
+  WM: '#534AB7',
+  AC: '#0F6E56',
+  AV: '#0B7A5C',
+  SD: '#B0246B'
+};
+function CatFilterChips({
+  sel,
+  onChange
+}) {
+  const toggle = c => {
+    if (sel.includes(c)) {
+      if (sel.length > 1) onChange(sel.filter(x => x !== c));
+    } else {
+      onChange(CATS.filter(x => sel.includes(x) || x === c));
+    }
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: '#6b7280',
+      marginBottom: 8,
+      fontWeight: 600
+    }
+  }, "\u0E41\u0E2A\u0E14\u0E07 Category"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: 8
+    }
+  }, CATS.map(c => {
+    const on = sel.includes(c);
+    const col = CAT_COLORS[c];
+    return /*#__PURE__*/React.createElement("button", {
+      key: c,
+      onClick: () => toggle(c),
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 7,
+        padding: '6px 12px',
+        borderRadius: 8,
+        cursor: 'pointer',
+        fontSize: 12,
+        fontWeight: 600,
+        transition: 'all .12s',
+        border: on ? `1.5px solid ${col}` : '0.5px solid #d1d5db',
+        background: on ? col + '1A' : 'transparent',
+        color: on ? col : '#9ca3af'
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        width: 9,
+        height: 9,
+        borderRadius: '50%',
+        background: on ? col : '#d1d5db'
+      }
+    }), c + ' \xB7 ' + CAT_LABELS[c]);
+  })));
+}
 const SITUATIONS = ['ลูกค้าหนาแน่น', 'สินค้าขาด Stock', 'โปรโมชั่นดึงดูด', 'คู่แข่งจัดโปรฯ', 'อากาศส่งผล', 'พนักงานไม่พอ', 'สินค้าใหม่ขายดี', 'Display พัง', 'อื่นๆ'];
 const ISSUES = ['สินค้าขาด', 'พนักงานไม่พอ', 'ระบบขัดข้อง', 'ลูกค้าร้องเรียน', 'โปรมีปัญหา', 'หน้าร้านสกปรก'];
 
@@ -3731,16 +3801,8 @@ function SurveyPage({
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
     empId: '',
-    catComments: {
-      REF: '',
-      WM: '',
-      AC: ''
-    },
-    catSituations: {
-      REF: '',
-      WM: '',
-      AC: ''
-    },
+    catComments: Object.fromEntries(CATS.map(c => [c, ''])),
+    catSituations: Object.fromEntries(CATS.map(c => [c, ''])),
     issues: [],
     overallComment: ''
   });
@@ -3770,16 +3832,8 @@ function SurveyPage({
     setSite('');
     setForm({
       empId: '',
-      catComments: {
-        REF: '',
-        WM: '',
-        AC: ''
-      },
-      catSituations: {
-        REF: '',
-        WM: '',
-        AC: ''
-      },
+      catComments: Object.fromEntries(CATS.map(c => [c, ''])),
+      catSituations: Object.fromEntries(CATS.map(c => [c, ''])),
       issues: [],
       overallComment: ''
     });
@@ -3799,11 +3853,7 @@ function SurveyPage({
       issues: form.issues,
       overallComment: form.overallComment,
       catComments: form.catComments,
-      sales: {
-        REF: siteData?.REF,
-        WM: siteData?.WM,
-        AC: siteData?.AC
-      }
+      sales: Object.fromEntries(CATS.map(c => [c, siteData?.[c]]))
     };
     await onSubmit(payload);
     setBusy(false);
@@ -3941,11 +3991,11 @@ function SurveyPage({
   }, "\u0E22\u0E2D\u0E14\u0E02\u0E32\u0E22\u0E23\u0E27\u0E21 \xB7 \u0E2D\u0E31\u0E1E\u0E40\u0E14\u0E15 ", TODAY, " \u2014 ", site), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
-      gridTemplateColumns: '1fr 1fr 1fr',
+      gridTemplateColumns: 'repeat(auto-fit,minmax(95px,1fr))',
       gap: 14
     }
   }, CATS.map(cat => {
-    const d = siteData[cat];
+    const d = siteData[cat] || { sell: 0, target: 0 };
     const ap = achPct(d.sell, d.target);
     return /*#__PURE__*/React.createElement("div", {
       key: cat,
@@ -4182,6 +4232,8 @@ function DashboardPage({
   const [ac, setAc] = useState('ALL');
   const [chartMode, setChartMode] = useState('ach'); // 'ach' | 'sell'
   const [top30Region, setTop30Region] = useState('ALL');
+  const [catSel, setCatSel] = useState(CATS);
+  const visCats = CATS.filter(c => catSel.includes(c));
   const regions = [...new Set(activeSites.map(s => s.region))].sort();
   const availableAccounts = [...new Set((rf === 'ALL' ? activeSites : activeSites.filter(s => s.region === rf)).map(s => s.account || 'Unknown').filter(Boolean))].sort();
   const availableAS = [...new Set(activeSites.filter(s => (rf === 'ALL' || s.region === rf) && (ac === 'ALL' || s.account === ac)).map(s => s.as_code))].sort();
@@ -4199,13 +4251,13 @@ function DashboardPage({
   // Summary totals
   const tSell = cat => sites.reduce((s, x) => s + (x[cat]?.sell || 0), 0);
   const tTarget = cat => sites.reduce((s, x) => s + (x[cat]?.target || 0), 0);
-  const grandGap = tSell('REF') + tSell('WM') + tSell('AC') - (tTarget('REF') + tTarget('WM') + tTarget('AC'));
+  const grandGap = visCats.reduce((s, c) => s + tSell(c) - tTarget(c), 0);
 
   // Heat Map — by Region
   const allRegions = [...new Set(sites.map(s => s.region))].sort();
   const regionStats = r => {
     const rs = sites.filter(s => r === 'ALL' || s.region === r);
-    return CATS.map(cat => ({
+    return visCats.map(cat => ({
       cat,
       sell: rs.reduce((s, x) => s + (x[cat]?.sell || 0), 0),
       target: rs.reduce((s, x) => s + (x[cat]?.target || 0), 0)
@@ -4215,14 +4267,14 @@ function DashboardPage({
   // Gap by region
   const regionGap = r => {
     const rs = sites.filter(s => s.region === r);
-    return CATS.reduce((o, cat) => {
+    return visCats.reduce((o, cat) => {
       o[cat] = rs.reduce((s, x) => s + (x[cat]?.sell || 0), 0) - rs.reduce((s, x) => s + (x[cat]?.target || 0), 0);
       return o;
     }, {});
   };
   const maxAbsGap = Math.max(...allRegions.map(r => {
     const g = regionGap(r);
-    return Math.max(...CATS.map(c => Math.abs(g[c] || 0)));
+    return Math.max(...visCats.map(c => Math.abs(g[c] || 0)));
   }), 1);
 
   // คำนวณ Time Gone (วันอาทิตย์ล่าสุด) สำหรับ Dashboard
@@ -4271,7 +4323,10 @@ function DashboardPage({
   const blStyle = {
     borderLeft: '0.5px solid #e5e7eb'
   };
-  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(CatFilterChips, {
+    sel: catSel,
+    onChange: setCatSel
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
       gridTemplateColumns: '1fr 1fr 1fr',
@@ -4329,11 +4384,11 @@ function DashboardPage({
   }, a))))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(4,1fr)',
+      gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))',
       gap: 10,
       marginBottom: 14
     }
-  }, CATS.map(cat => {
+  }, visCats.map(cat => {
     const sell = tSell(cat);
     const target = tTarget(cat);
     const ap = achPct(sell, target);
@@ -4410,20 +4465,21 @@ function DashboardPage({
     // คำนวณ max value สำหรับ scale
     const chartData = allRegions.map(r => {
       const rs = sites.filter(s => s.region === r);
-      return {
-        r,
-        REF: chartMode === 'ach' ? achPct(rs.reduce((s, x) => s + (x.REF?.sell || 0), 0), rs.reduce((s, x) => s + (x.REF?.target || 0), 0)) : rs.reduce((s, x) => s + (x.REF?.sell || 0), 0) / 1000000,
-        WM: chartMode === 'ach' ? achPct(rs.reduce((s, x) => s + (x.WM?.sell || 0), 0), rs.reduce((s, x) => s + (x.WM?.target || 0), 0)) : rs.reduce((s, x) => s + (x.WM?.sell || 0), 0) / 1000000,
-        AC: chartMode === 'ach' ? achPct(rs.reduce((s, x) => s + (x.AC?.sell || 0), 0), rs.reduce((s, x) => s + (x.AC?.target || 0), 0)) : rs.reduce((s, x) => s + (x.AC?.sell || 0), 0) / 1000000
-      };
+      const o = { r };
+      visCats.forEach(c => {
+        const sell = rs.reduce((s, x) => s + (x[c]?.sell || 0), 0);
+        const target = rs.reduce((s, x) => s + (x[c]?.target || 0), 0);
+        o[c] = chartMode === 'ach' ? achPct(sell, target) : sell / 1000000;
+      });
+      return o;
     });
-    const maxVal = Math.max(...chartData.flatMap(d => [d.REF, d.WM, d.AC]), chartMode === 'ach' ? 120 : 10);
+    const maxVal = Math.max(...chartData.flatMap(d => visCats.map(c => d[c])), chartMode === 'ach' ? 120 : 10);
     const chartH = 200;
     const chartY0 = 220;
     const chartX0 = 60;
-    const groupW = 120;
     const barW = 20;
     const barGap = 4;
+    const groupW = visCats.length * barW + (visCats.length - 1) * barGap + 40;
     const totalW = chartX0 + allRegions.length * groupW + 40;
     // y position ของค่า v
     const yPos = v => chartY0 - Math.min(v / maxVal, 1.2) * chartH;
@@ -4482,7 +4538,7 @@ function DashboardPage({
         marginBottom: 10,
         flexWrap: 'wrap'
       }
-    }, CATS.map(c => /*#__PURE__*/React.createElement("span", {
+    }, visCats.map(c => /*#__PURE__*/React.createElement("span", {
       key: c,
       style: {
         display: 'flex',
@@ -4565,19 +4621,11 @@ function DashboardPage({
       fill: "#ef4444"
     }, tgPct, "%")), chartData.map((d, gi) => {
       const gx = chartX0 + gi * groupW + 16;
-      const cats = [{
-        c: 'REF',
-        v: d.REF,
-        col: CAT_COLORS.REF
-      }, {
-        c: 'WM',
-        v: d.WM,
-        col: CAT_COLORS.WM
-      }, {
-        c: 'AC',
-        v: d.AC,
-        col: CAT_COLORS.AC
-      }];
+      const cats = visCats.map(c => ({
+        c,
+        v: d[c],
+        col: CAT_COLORS[c]
+      }));
       return /*#__PURE__*/React.createElement("g", {
         key: d.r
       }, cats.map((ct, ci) => {
@@ -4665,13 +4713,13 @@ function DashboardPage({
       textAlign: 'left',
       width: '13%'
     }
-  }, "Region"), CATS.map(cat => /*#__PURE__*/React.createElement("th", {
+  }, "Region"), visCats.map(cat => /*#__PURE__*/React.createElement("th", {
     key: cat,
     colSpan: 3,
     style: {
       ...thStyle,
       textAlign: 'center',
-      color: cat === 'REF' ? '#185FA5' : cat === 'WM' ? '#534AB7' : '#0F6E56',
+      color: CAT_COLORS_DARK[cat],
       ...blStyle
     }
   }, cat))), /*#__PURE__*/React.createElement("tr", {
@@ -4683,7 +4731,7 @@ function DashboardPage({
     style: {
       padding: '4px 8px'
     }
-  }), CATS.map(cat => [/*#__PURE__*/React.createElement("th", {
+  }), visCats.map(cat => [/*#__PURE__*/React.createElement("th", {
     key: cat + 's',
     style: {
       ...thStyle,
@@ -4757,7 +4805,7 @@ function DashboardPage({
       color: '#111',
       fontSize: 12
     }
-  }, "\u0E23\u0E27\u0E21"), CATS.map(cat => {
+  }, "\u0E23\u0E27\u0E21"), visCats.map(cat => {
     const sell = tSell(cat);
     const target = tTarget(cat);
     const ap = achPct(sell, target);
@@ -4853,11 +4901,11 @@ function DashboardPage({
       textAlign: 'left',
       width: '16%'
     }
-  }, "Region"), CATS.map(cat => /*#__PURE__*/React.createElement("th", {
+  }, "Region"), visCats.map(cat => /*#__PURE__*/React.createElement("th", {
     key: cat,
     style: {
       ...thStyle,
-      color: cat === 'REF' ? '#185FA5' : cat === 'WM' ? '#534AB7' : '#0F6E56',
+      color: CAT_COLORS_DARK[cat],
       ...blStyle
     }
   }, cat, " Gap")), /*#__PURE__*/React.createElement("th", {
@@ -4867,7 +4915,7 @@ function DashboardPage({
     }
   }, "\u0E23\u0E27\u0E21"))), /*#__PURE__*/React.createElement("tbody", null, allRegions.map(r => {
     const g = regionGap(r);
-    const total = CATS.reduce((s, cat) => s + (g[cat] || 0), 0);
+    const total = visCats.reduce((s, cat) => s + (g[cat] || 0), 0);
     return /*#__PURE__*/React.createElement("tr", {
       key: r,
       style: {
@@ -4879,7 +4927,7 @@ function DashboardPage({
         fontWeight: 600,
         color: '#111'
       }
-    }, r), CATS.map(cat => {
+    }, r), visCats.map(cat => {
       const v = g[cat] || 0;
       const pct = Math.abs(v) / maxAbsGap * 100;
       return /*#__PURE__*/React.createElement("td", {
@@ -4945,7 +4993,7 @@ function DashboardPage({
       fontWeight: 700,
       color: '#111'
     }
-  }, "\u0E23\u0E27\u0E21"), CATS.map(cat => {
+  }, "\u0E23\u0E27\u0E21"), visCats.map(cat => {
     const v = sites.reduce((s, x) => s + (x[cat]?.sell || 0) - (x[cat]?.target || 0), 0);
     return /*#__PURE__*/React.createElement("td", {
       key: cat,
@@ -4974,11 +5022,8 @@ function DashboardPage({
     }
   }, fmtM(grandGap))))))), (() => {
     const top30Sites = top30Region === 'ALL' ? sites : sites.filter(s => s.region === top30Region);
-    const top30 = [...top30Sites].sort((a, b) => {
-      const ta = (b.REF?.target || 0) + (b.WM?.target || 0) + (b.AC?.target || 0);
-      const tb = (a.REF?.target || 0) + (a.WM?.target || 0) + (a.AC?.target || 0);
-      return ta - tb;
-    }).slice(0, 30);
+    const totalTargetOf = s => visCats.reduce((sum, c) => sum + (s[c]?.target || 0), 0);
+    const top30 = [...top30Sites].sort((a, b) => totalTargetOf(b) - totalTargetOf(a)).slice(0, 30);
     return /*#__PURE__*/React.createElement("div", {
       style: {
         ...card,
@@ -5018,7 +5063,7 @@ function DashboardPage({
         color: '#6b7280',
         marginBottom: 14
       }
-    }, "REF+WM+AC Target \u0E23\u0E27\u0E21\u0E2A\u0E39\u0E07\u0E2A\u0E38\u0E14 30 \u0E2D\u0E31\u0E19\u0E14\u0E31\u0E1A\u0E41\u0E23\u0E01 \xB7 \u0E41\u0E2A\u0E14\u0E07 Sell / Target / Ach% \u0E41\u0E22\u0E01 Category"), /*#__PURE__*/React.createElement("div", {
+    }, visCats.join('+') + " Target \u0E23\u0E27\u0E21\u0E2A\u0E39\u0E07\u0E2A\u0E38\u0E14 30 \u0E2D\u0E31\u0E19\u0E14\u0E31\u0E1A\u0E41\u0E23\u0E01 \xB7 \u0E41\u0E2A\u0E14\u0E07 Sell / Target / Ach% \u0E41\u0E22\u0E01 Category"), /*#__PURE__*/React.createElement("div", {
       style: {
         overflowX: 'auto'
       }
@@ -5057,13 +5102,13 @@ function DashboardPage({
         width: '8%',
         ...blStyle
       }
-    }, "Target \u0E23\u0E27\u0E21"), CATS.map(cat => /*#__PURE__*/React.createElement("th", {
+    }, "Target \u0E23\u0E27\u0E21"), visCats.map(cat => /*#__PURE__*/React.createElement("th", {
       key: cat,
       colSpan: 3,
       style: {
         ...thStyle,
         textAlign: 'center',
-        color: cat === 'REF' ? '#185FA5' : cat === 'WM' ? '#534AB7' : '#0F6E56',
+        color: CAT_COLORS_DARK[cat],
         ...blStyle
       }
     }, cat))), /*#__PURE__*/React.createElement("tr", {
@@ -5088,7 +5133,7 @@ function DashboardPage({
         padding: '4px 6px',
         ...blStyle
       }
-    }), CATS.map(cat => [/*#__PURE__*/React.createElement("th", {
+    }), visCats.map(cat => [/*#__PURE__*/React.createElement("th", {
       key: cat + 's',
       style: {
         ...thStyle,
@@ -5101,7 +5146,7 @@ function DashboardPage({
       key: cat + 'a',
       style: thStyle
     }, "Ach%")]))), /*#__PURE__*/React.createElement("tbody", null, top30.map((s, i) => {
-      const totalTarget = (s.REF?.target || 0) + (s.WM?.target || 0) + (s.AC?.target || 0);
+      const totalTarget = visCats.reduce((sum, c) => sum + (s[c]?.target || 0), 0);
       return /*#__PURE__*/React.createElement("tr", {
         key: s.site,
         style: {
@@ -5139,7 +5184,7 @@ function DashboardPage({
           textAlign: 'right',
           ...blStyle
         }
-      }, fmtM(totalTarget)), CATS.map(cat => {
+      }, fmtM(totalTarget)), visCats.map(cat => {
         const ap = achPct(s[cat]?.sell, s[cat]?.target);
         const {
           bg,
@@ -5494,6 +5539,8 @@ function PerformancePage({
   const [region, setRegion] = useState(preSelect?.region || 'ALL');
   const [asCode, setAsCode] = useState(preSelect?.as_code || 'ALL');
   const [acFilter, setAcFilter] = useState('ALL');
+  const [catSel, setCatSel] = useState(CATS);
+  const visCats = CATS.filter(c => catSel.includes(c));
   const regions = [...new Set(activeSites.map(s => s.region))].sort();
   const availableAccounts = [...new Set(activeSites.map(s => s.account || 'Unknown').filter(Boolean))].sort();
   const availableRegions = [...new Set((acFilter === 'ALL' ? activeSites : activeSites.filter(s => s.account === acFilter)).map(s => s.region))].sort();
@@ -5512,8 +5559,8 @@ function PerformancePage({
   // Summary totals
   const totalSell = CAT => filteredSites.reduce((s, x) => s + (x[CAT]?.sell || 0), 0);
   const totalTarget = CAT => filteredSites.reduce((s, x) => s + (x[CAT]?.target || 0), 0);
-  const grandSell = totalSell('REF') + totalSell('WM') + totalSell('AC');
-  const grandTarget = totalTarget('REF') + totalTarget('WM') + totalTarget('AC');
+  const grandSell = visCats.reduce((s, c) => s + totalSell(c), 0);
+  const grandTarget = visCats.reduce((s, c) => s + totalTarget(c), 0);
   const grandAch = grandTarget ? Math.round(grandSell / grandTarget * 100) : 0;
 
   // Account groups — ดึงจาก sites ที่กรองแค่ Account+Region (ไม่กรอง AS Code)
@@ -5585,18 +5632,13 @@ function PerformancePage({
   });
   const submitted = filteredSites.filter(s => fbMap[s.site]).length;
   const belowTarget = filteredSites.filter(s => {
-    const refA = achPct(s.REF?.sell, s.REF?.target);
-    const wmA = achPct(s.WM?.sell, s.WM?.target);
-    const acA = achPct(s.AC?.sell, s.AC?.target);
-    return Math.min(refA, wmA, acA) < 80;
+    const achs = visCats.map(c => achPct(s[c]?.sell, s[c]?.target));
+    return Math.min(...achs) < 80;
   }).length;
 
   // Sorted branch list
-  const sortedSites = [...filteredSites].sort((a, b) => {
-    const avgA = (achPct(a.REF?.sell, a.REF?.target) + achPct(a.WM?.sell, a.WM?.target) + achPct(a.AC?.sell, a.AC?.target)) / 3;
-    const avgB = (achPct(b.REF?.sell, b.REF?.target) + achPct(b.WM?.sell, b.WM?.target) + achPct(b.AC?.sell, b.AC?.target)) / 3;
-    return avgA - avgB;
-  });
+  const avgAch = s => visCats.reduce((sum, c) => sum + achPct(s[c]?.sell, s[c]?.target), 0) / visCats.length;
+  const sortedSites = [...filteredSites].sort((a, b) => avgAch(a) - avgAch(b));
   function achColor(p) {
     if (p >= timeGonePct) return {
       bg: '#EAF3DE',
@@ -5621,7 +5663,10 @@ function PerformancePage({
       maxWidth: 1100,
       margin: '0 auto'
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement(CatFilterChips, {
+    sel: catSel,
+    onChange: setCatSel
+  }), /*#__PURE__*/React.createElement("div", {
     style: {
       marginBottom: 14
     }
@@ -5829,7 +5874,7 @@ function PerformancePage({
       letterSpacing: '.05em',
       textTransform: 'uppercase'
     }
-  }, "\u0E22\u0E2D\u0E14\u0E02\u0E32\u0E22\u0E23\u0E27\u0E21\u0E17\u0E38\u0E01\u0E2B\u0E49\u0E32\u0E07 (REF+WM+AC)"), /*#__PURE__*/React.createElement("div", {
+  }, "\u0E22\u0E2D\u0E14\u0E02\u0E32\u0E22\u0E23\u0E27\u0E21\u0E17\u0E38\u0E01\u0E2B\u0E49\u0E32\u0E07 (" + visCats.join('+') + ")"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 28,
       fontWeight: 800,
@@ -5891,11 +5936,11 @@ function PerformancePage({
   }, timeGonePct, "%"))))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(3,1fr)',
+      gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))',
       gap: 12,
       marginBottom: 16
     }
-  }, CATS.map(cat => {
+  }, visCats.map(cat => {
     const sell = totalSell(cat);
     const target = totalTarget(cat);
     const ap = achPct(sell, target);
@@ -5983,7 +6028,7 @@ function PerformancePage({
       marginBottom: 16,
       flexWrap: 'wrap'
     }
-  }, CATS.map(c => /*#__PURE__*/React.createElement("span", {
+  }, visCats.map(c => /*#__PURE__*/React.createElement("span", {
     key: c,
     style: {
       display: 'flex',
@@ -6071,7 +6116,7 @@ function PerformancePage({
         flexDirection: 'column',
         gap: 8
       }
-    }, CATS.map(cat => {
+    }, visCats.map(cat => {
       const sell = acctSites.reduce((s, x) => s + (x[cat]?.sell || 0), 0);
       const target = acctSites.reduce((s, x) => s + (x[cat]?.target || 0), 0);
       const ap = achPct(sell, target);
@@ -6195,26 +6240,13 @@ function PerformancePage({
         gap: 8
       }
     }, acctSites.map(s => {
-      const refA = achPct(s.REF?.sell, s.REF?.target);
-      const wmA = achPct(s.WM?.sell, s.WM?.target);
-      const acA = achPct(s.AC?.sell, s.AC?.target);
       const fb = fbMap[s.site];
-      const catData = [{
-        cat: 'REF',
-        sell: s.REF?.sell || 0,
-        target: s.REF?.target || 0,
-        ap: refA
-      }, {
-        cat: 'WM',
-        sell: s.WM?.sell || 0,
-        target: s.WM?.target || 0,
-        ap: wmA
-      }, {
-        cat: 'AC',
-        sell: s.AC?.sell || 0,
-        target: s.AC?.target || 0,
-        ap: acA
-      }];
+      const catData = visCats.map(cat => ({
+        cat,
+        sell: s[cat]?.sell || 0,
+        target: s[cat]?.target || 0,
+        ap: achPct(s[cat]?.sell, s[cat]?.target)
+      }));
       return /*#__PURE__*/React.createElement("div", {
         key: s.site,
         style: {
@@ -6276,7 +6308,7 @@ function PerformancePage({
       }, "\uD83D\uDCCB Survey")), /*#__PURE__*/React.createElement("div", {
         style: {
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr 1fr',
+          gridTemplateColumns: 'repeat(auto-fit,minmax(90px,1fr))',
           gap: 8
         }
       }, catData.map(({
@@ -6351,9 +6383,8 @@ function App() {
   const [feedbacks, setFeedbacks] = useState([]);
   const [sheetsUrl] = useState(true); // hardcoded — always connected
   const [liveSales, setLiveSales] = useState(null);
-  // มี cache เดิมไหม -> ถ้ามีไม่ต้องโชว์ loading screen เลย แสดงผลจาก cache ทันทีแล้วค่อย sync เงียบๆ
-  const hasCache = !!(storage.get('wss_feedbacks_v2') && storage.get('wss_live_sales'));
-  const [loading, setLoading] = useState(!hasCache);
+  // เช็ค cache ครั้งเดียวตอน mount (lazy initializer) — ถ้ามี cache ไม่ต้องโชว์ loading screen
+  const [loading, setLoading] = useState(() => !(storage.get('wss_feedbacks_v2') && storage.get('wss_live_sales')));
   const [surveyPreSelect, setSurveyPreSelect] = useState(null);
   const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbwSF2Y_2E46FKZYcS7mu7ucfwNXQpRR-kpRjCjWsbjCzFan3c--nJ0HHifsfcR8_yaq/exec';
 
@@ -6379,7 +6410,16 @@ function App() {
       }
     }).finally(() => setLoading(false));
   }, []);
-  const activeSites = liveSales || MASTER_SITES;
+  const activeSites = useMemo(() => {
+    const raw = liveSales || MASTER_SITES;
+    return raw.map(s => {
+      const o = { ...s };
+      CATS.forEach(c => {
+        if (!o[c]) o[c] = { sell: 0, target: 0 };
+      });
+      return o;
+    });
+  }, [liveSales]);
   const handleSubmit = useCallback(async fb => {
     const updated = [...feedbacks, fb];
     setFeedbacks(updated);
