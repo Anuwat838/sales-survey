@@ -3736,8 +3736,8 @@ function CatFilterChips({
     }), c + ' \xB7 ' + CAT_LABELS[c]);
   })));
 }
-const SITUATIONS = ['สินค้าขาด Stock', 'โปรโมชั่นแข่งขันได้ยาก', 'พื้นที่จัดวางสินค้า ทำเลไม่ดี', 'ตัวโชว์รุ่นที่ขายดี ไม่มีจัดวาง', 'คนขาด/คุณภาพพนักงานขายไม่ดี', 'ยอดขายดี สถานการณ์ปกติ', 'อื่นๆ'];
-const ISSUES = ['Display Area', 'Product Line-up', 'Price & Promotion', 'PC/Manpower', 'Stock'];
+const SITUATIONS = ['ลูกค้าหนาแน่น', 'สินค้าขาด Stock', 'โปรโมชั่นดึงดูด', 'คู่แข่งจัดโปรฯ', 'อากาศส่งผล', 'พนักงานไม่พอ', 'สินค้าใหม่ขายดี', 'Display พัง', 'อื่นๆ'];
+const ISSUES = ['สินค้าขาด', 'พนักงานไม่พอ', 'ระบบขัดข้อง', 'ลูกค้าร้องเรียน', 'โปรมีปัญหา', 'หน้าร้านสกปรก'];
 
 // shared styles
 const card = {
@@ -3782,6 +3782,145 @@ const btn = (bg, dis = false) => ({
   cursor: dis ? 'not-allowed' : 'pointer',
   transition: 'all .2s'
 });
+function MultiSelectDropdown({
+  label,
+  options,
+  selected,
+  onChange,
+  allLabel
+}) {
+  const [open, setOpen] = useState(false);
+  const summary = selected.length === 0 ? allLabel : selected.length === 1 ? selected[0] : selected.length + ' ' + label;
+  const toggleOne = o => {
+    if (selected.includes(o)) onChange(selected.filter(x => x !== o));else onChange([...selected, o]);
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'relative'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => setOpen(!open),
+    style: {
+      width: '100%',
+      padding: '11px 14px',
+      borderRadius: 10,
+      border: '2px solid #e5e7eb',
+      background: '#fff',
+      fontSize: 15,
+      color: '#111',
+      cursor: 'pointer',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      boxSizing: 'border-box'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap'
+    }
+  }, summary), /*#__PURE__*/React.createElement("span", {
+    style: {
+      marginLeft: 8,
+      color: '#9ca3af',
+      fontSize: 12,
+      flexShrink: 0
+    }
+  }, open ? '\u25B4' : '\u25BE')), open && /*#__PURE__*/React.createElement("div", {
+    onClick: () => setOpen(false),
+    style: {
+      position: 'fixed',
+      inset: 0,
+      zIndex: 40
+    }
+  }), open && /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'absolute',
+      top: 'calc(100% + 4px)',
+      left: 0,
+      right: 0,
+      zIndex: 50,
+      background: '#fff',
+      border: '1px solid #e5e7eb',
+      borderRadius: 10,
+      boxShadow: '0 6px 20px rgba(0,0,0,0.14)',
+      maxHeight: 280,
+      overflowY: 'auto'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      gap: 6,
+      padding: 8,
+      borderBottom: '1px solid #f1f5f9',
+      position: 'sticky',
+      top: 0,
+      background: '#fff'
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => onChange([...options]),
+    style: {
+      flex: 1,
+      height: 32,
+      fontSize: 12,
+      border: '1px solid #e5e7eb',
+      borderRadius: 8,
+      background: 'transparent',
+      cursor: 'pointer',
+      color: '#374151'
+    }
+  }, "\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E17\u0E31\u0E49\u0E07\u0E2B\u0E21\u0E14"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => onChange([]),
+    style: {
+      flex: 1,
+      height: 32,
+      fontSize: 12,
+      border: '1px solid #e5e7eb',
+      borderRadius: 8,
+      background: 'transparent',
+      cursor: 'pointer',
+      color: '#374151'
+    }
+  }, "\u0E25\u0E49\u0E32\u0E07")), options.map(o => {
+    const on = selected.includes(o);
+    return /*#__PURE__*/React.createElement("div", {
+      key: o,
+      onClick: () => toggleOne(o),
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '9px 12px',
+        cursor: 'pointer',
+        fontSize: 14
+      },
+      onMouseEnter: e => e.currentTarget.style.background = '#f8fafc',
+      onMouseLeave: e => e.currentTarget.style.background = 'transparent'
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        width: 18,
+        height: 18,
+        borderRadius: 4,
+        border: `1.5px solid ${on ? '#2563eb' : '#cbd5e1'}`,
+        background: on ? '#2563eb' : 'transparent',
+        color: '#fff',
+        fontSize: 12,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0
+      }
+    }, on ? '\u2713' : ''), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: '#111',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+      }
+    }, o));
+  })));
+}
 
 // ============================================================
 // SURVEY
@@ -4229,24 +4368,24 @@ function DashboardPage({
 }) {
   const [rf, setRf] = useState('ALL');
   const [af, setAf] = useState('ALL');
-  const [ac, setAc] = useState('ALL');
+  const [ac, setAc] = useState([]);
   const [chartMode, setChartMode] = useState('ach'); // 'ach' | 'sell'
   const [top30Region, setTop30Region] = useState('ALL');
   const [catSel, setCatSel] = useState(CATS);
   const visCats = CATS.filter(c => catSel.includes(c));
   const regions = [...new Set(activeSites.map(s => s.region))].sort();
   const availableAccounts = [...new Set((rf === 'ALL' ? activeSites : activeSites.filter(s => s.region === rf)).map(s => s.account || 'Unknown').filter(Boolean))].sort();
-  const availableAS = [...new Set(activeSites.filter(s => (rf === 'ALL' || s.region === rf) && (ac === 'ALL' || s.account === ac)).map(s => s.as_code))].sort();
+  const availableAS = [...new Set(activeSites.filter(s => (rf === 'ALL' || s.region === rf) && (ac.length === 0 || ac.includes(s.account || 'Unknown'))).map(s => s.as_code))].sort();
   const handleRegionChange = e => {
     setRf(e.target.value);
     setAf('ALL');
     setAc('ALL');
   };
-  const handleAccountChange = e => {
-    setAc(e.target.value);
+  const handleAccountChange = vals => {
+    setAc(vals);
     setAf('ALL');
   };
-  const sites = activeSites.filter(s => (rf === 'ALL' || s.region === rf) && (ac === 'ALL' || s.account === ac) && (af === 'ALL' || s.as_code === af));
+  const sites = activeSites.filter(s => (rf === 'ALL' || s.region === rf) && (ac.length === 0 || ac.includes(s.account || 'Unknown')) && (af === 'ALL' || s.as_code === af));
 
   // Summary totals
   const tSell = cat => sites.reduce((s, x) => s + (x[cat]?.sell || 0), 0);
@@ -4339,17 +4478,13 @@ function DashboardPage({
       color: '#6b7280',
       marginBottom: 4
     }
-  }, "Account"), /*#__PURE__*/React.createElement("select", {
-    value: ac,
+  }, "Account"), /*#__PURE__*/React.createElement(MultiSelectDropdown, {
+    label: "Account",
+    options: availableAccounts,
+    selected: ac,
     onChange: handleAccountChange,
-    style: {
-      ...sel
-    }
-  }, /*#__PURE__*/React.createElement("option", {
-    value: "ALL"
-  }, "\u0E17\u0E38\u0E01 Account"), availableAccounts.map(a => /*#__PURE__*/React.createElement("option", {
-    key: a
-  }, a)))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    allLabel: "\u0E17\u0E38\u0E01 Account"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
       color: '#6b7280',
@@ -5063,7 +5198,7 @@ function DashboardPage({
         color: '#6b7280',
         marginBottom: 14
       }
-    }, visCats.join('+') + " Target \u0E23\u0E27\u0E21\u0E2A\u0E39\u0E07\u0E2A\u0E38\u0E14 30 \u0E2D\u0E31\u0E19\u0E14\u0E31\u0E1A\u0E41\u0E23\u0E01 \xB7 \u0E41\u0E2A\u0E14\u0E07 Sell / Target / Ach% \u0E41\u0E22\u0E01 Category"), /*#__PURE__*/React.createElement("div", {
+    }, visCats.join('+') + " Target \u0E23\u0E27\u0E21\u0E2A\u0E39\u0E07\u0E2A\u0E38\u0E14 30 \u0E2D\u0E31\u0E19\u0E14\u0E31\u0E1A\u0E41\u0E23\u0E01 \xB7 \u0E41\u0E2A\u0E14\u0E07 Target / Ach% \u0E41\u0E22\u0E01 Category"), /*#__PURE__*/React.createElement("div", {
       style: {
         overflowX: 'auto'
       }
@@ -5104,7 +5239,7 @@ function DashboardPage({
       }
     }, "Target \u0E23\u0E27\u0E21"), visCats.map(cat => /*#__PURE__*/React.createElement("th", {
       key: cat,
-      colSpan: 3,
+      colSpan: 2,
       style: {
         ...thStyle,
         textAlign: 'center',
@@ -5134,14 +5269,11 @@ function DashboardPage({
         ...blStyle
       }
     }), visCats.map(cat => [/*#__PURE__*/React.createElement("th", {
-      key: cat + 's',
+      key: cat + 't',
       style: {
         ...thStyle,
         ...blStyle
       }
-    }, "Sell"), /*#__PURE__*/React.createElement("th", {
-      key: cat + 't',
-      style: thStyle
     }, "Target"), /*#__PURE__*/React.createElement("th", {
       key: cat + 'a',
       style: thStyle
@@ -5191,15 +5323,10 @@ function DashboardPage({
           color
         } = achBadge(ap);
         return [/*#__PURE__*/React.createElement("td", {
-          key: cat + 's',
-          style: {
-            ...tdStyle,
-            ...blStyle
-          }
-        }, fmtM(s[cat]?.sell || 0)), /*#__PURE__*/React.createElement("td", {
           key: cat + 't',
           style: {
             ...tdStyle,
+            ...blStyle,
             color: '#9ca3af'
           }
         }, fmtM(s[cat]?.target || 0)), /*#__PURE__*/React.createElement("td", {
@@ -5538,15 +5665,15 @@ function PerformancePage({
   });
   const [region, setRegion] = useState(preSelect?.region || 'ALL');
   const [asCode, setAsCode] = useState(preSelect?.as_code || 'ALL');
-  const [acFilter, setAcFilter] = useState('ALL');
+  const [acFilter, setAcFilter] = useState([]);
   const [catSel, setCatSel] = useState(CATS);
   const visCats = CATS.filter(c => catSel.includes(c));
   const regions = [...new Set(activeSites.map(s => s.region))].sort();
   const availableAccounts = [...new Set(activeSites.map(s => s.account || 'Unknown').filter(Boolean))].sort();
-  const availableRegions = [...new Set((acFilter === 'ALL' ? activeSites : activeSites.filter(s => s.account === acFilter)).map(s => s.region))].sort();
-  const availableAS = [...new Set(activeSites.filter(s => (acFilter === 'ALL' || s.account === acFilter) && (region === 'ALL' || s.region === region)).map(s => s.as_code))].sort();
-  const handleAccountFilterChange = e => {
-    setAcFilter(e.target.value);
+  const availableRegions = [...new Set((acFilter.length === 0 ? activeSites : activeSites.filter(s => acFilter.includes(s.account || 'Unknown'))).map(s => s.region))].sort();
+  const availableAS = [...new Set(activeSites.filter(s => (acFilter.length === 0 || acFilter.includes(s.account || 'Unknown')) && (region === 'ALL' || s.region === region)).map(s => s.as_code))].sort();
+  const handleAccountFilterChange = vals => {
+    setAcFilter(vals);
     setRegion('ALL');
     setAsCode('ALL');
   };
@@ -5554,7 +5681,7 @@ function PerformancePage({
     setRegion(e.target.value);
     setAsCode('ALL');
   };
-  const filteredSites = activeSites.filter(s => (acFilter === 'ALL' || s.account === acFilter) && (region === 'ALL' || s.region === region) && (asCode === 'ALL' || s.as_code === asCode));
+  const filteredSites = activeSites.filter(s => (acFilter.length === 0 || acFilter.includes(s.account || 'Unknown')) && (region === 'ALL' || s.region === region) && (asCode === 'ALL' || s.as_code === asCode));
 
   // Summary totals
   const totalSell = CAT => filteredSites.reduce((s, x) => s + (x[CAT]?.sell || 0), 0);
@@ -5565,7 +5692,7 @@ function PerformancePage({
 
   // Account groups — ดึงจาก sites ที่กรองแค่ Account+Region (ไม่กรอง AS Code)
   // เพื่อให้แสดงทุก Account แม้จะเลือก AS Code เฉพาะ
-  const sitesForAccounts = activeSites.filter(s => (acFilter === 'ALL' || s.account === acFilter) && (region === 'ALL' || s.region === region));
+  const sitesForAccounts = activeSites.filter(s => (acFilter.length === 0 || acFilter.includes(s.account || 'Unknown')) && (region === 'ALL' || s.region === region));
   const accounts = [...new Set(sitesForAccounts.map(s => s.account || 'Unknown'))].sort();
   // สีที่กำหนดตายตัวสำหรับ Account หลัก
   const ACCT_COLORS_FIXED = {
@@ -5676,7 +5803,7 @@ function PerformancePage({
       fontSize: 18,
       color: '#111'
     }
-  }, "[CE] Performance"), /*#__PURE__*/React.createElement("div", {
+  }, "[DA] Hyper Performance"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 12,
       color: '#6b7280',
@@ -5695,17 +5822,13 @@ function PerformancePage({
       color: '#6b7280',
       marginBottom: 4
     }
-  }, "Account"), /*#__PURE__*/React.createElement("select", {
-    value: acFilter,
+  }, "Account"), /*#__PURE__*/React.createElement(MultiSelectDropdown, {
+    label: "Account",
+    options: availableAccounts,
+    selected: acFilter,
     onChange: handleAccountFilterChange,
-    style: {
-      ...sel
-    }
-  }, /*#__PURE__*/React.createElement("option", {
-    value: "ALL"
-  }, "\u0E17\u0E38\u0E01 Account"), availableAccounts.map(a => /*#__PURE__*/React.createElement("option", {
-    key: a
-  }, a)))), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    allLabel: "\u0E17\u0E38\u0E01 Account"
+  })), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 11,
       color: '#6b7280',
