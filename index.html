@@ -3928,6 +3928,7 @@ function MultiSelectDropdown({
 function SurveyPage({
   feedbacks,
   onSubmit,
+  onRetrySync,
   sheetsUrl,
   activeSites,
   preSelect,
@@ -3938,6 +3939,9 @@ function SurveyPage({
   const [site, setSite] = useState(preSelect?.site || '');
   const [step, setStep] = useState(preSelect?.site ? 'form' : 'select');
   const [busy, setBusy] = useState(false);
+  const [syncOk, setSyncOk] = useState(true);
+  const [lastFb, setLastFb] = useState(null);
+  const [retrying, setRetrying] = useState(false);
   const [form, setForm] = useState({
     empId: '',
     catComments: Object.fromEntries(CATS.map(c => [c, ''])),
@@ -3981,6 +3985,7 @@ function SurveyPage({
     if (!form.empId) return;
     setBusy(true);
     const payload = {
+      id: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
       week: THIS_WEEK,
       region,
       as_code: asCode,
@@ -3994,9 +3999,18 @@ function SurveyPage({
       catComments: form.catComments,
       sales: Object.fromEntries(CATS.map(c => [c, siteData?.[c]]))
     };
-    await onSubmit(payload);
+    const ok = await onSubmit(payload);
+    setSyncOk(ok !== false);
+    setLastFb(payload);
     setBusy(false);
     setStep('done');
+  };
+  const retrySync = async () => {
+    if (!lastFb || !onRetrySync) return;
+    setRetrying(true);
+    const ok = await onRetrySync(lastFb);
+    setSyncOk(ok !== false);
+    setRetrying(false);
   };
   if (step === 'done') return /*#__PURE__*/React.createElement("div", {
     style: {
@@ -4013,32 +4027,51 @@ function SurveyPage({
       width: 80,
       height: 80,
       borderRadius: '50%',
-      background: 'linear-gradient(135deg,#22c55e,#16a34a)',
+      background: syncOk ? 'linear-gradient(135deg,#22c55e,#16a34a)' : 'linear-gradient(135deg,#f59e0b,#d97706)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       fontSize: 36,
       color: '#fff',
-      boxShadow: '0 8px 32px rgba(34,197,94,.35)'
+      boxShadow: syncOk ? '0 8px 32px rgba(34,197,94,.35)' : '0 8px 32px rgba(245,158,11,.35)'
     }
-  }, "\u2713"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
+  }, syncOk ? "\u2713" : "!"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h2", {
     style: {
       margin: '0 0 8px',
       fontSize: 22
     }
-  }, "\u0E2A\u0E48\u0E07 Feedback \u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08!"), /*#__PURE__*/React.createElement("p", {
+  }, syncOk ? "\u0E2A\u0E48\u0E07 Feedback \u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08!" : "\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E43\u0E19\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07\u0E41\u0E25\u0E49\u0E27"), /*#__PURE__*/React.createElement("p", {
     style: {
       margin: 0,
       color: '#6b7280',
       fontSize: 14
     }
-  }, site, " \xB7 ", THIS_WEEK), sheetsUrl && /*#__PURE__*/React.createElement("p", {
+  }, site, " \xB7 ", THIS_WEEK), syncOk ? sheetsUrl && /*#__PURE__*/React.createElement("p", {
     style: {
       margin: '8px 0 0',
       fontSize: 13,
       color: '#3b82f6'
     }
-  }, "\u2713 \u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01 Google Sheets \u0E41\u0E25\u0E49\u0E27")), /*#__PURE__*/React.createElement("button", {
+  }, "\u2713 \u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01 Google Sheets \u0E41\u0E25\u0E49\u0E27") : /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: '8px 0 12px',
+      fontSize: 13,
+      color: '#B45309'
+    }
+  }, "\u0E41\u0E15\u0E48\u0E22\u0E31\u0E07\u0E2A\u0E48\u0E07\u0E02\u0E36\u0E49\u0E19\u0E23\u0E30\u0E1A\u0E1A\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08 (\u0E40\u0E19\u0E47\u0E15\u0E2D\u0E32\u0E08\u0E02\u0E31\u0E14\u0E02\u0E49\u0E2D\u0E07)"), /*#__PURE__*/React.createElement("button", {
+    onClick: retrySync,
+    disabled: retrying,
+    style: {
+      padding: '10px 22px',
+      border: 'none',
+      borderRadius: 10,
+      background: retrying ? '#e5e7eb' : '#B45309',
+      color: retrying ? '#9ca3af' : '#fff',
+      fontSize: 14,
+      fontWeight: 700,
+      cursor: retrying ? 'not-allowed' : 'pointer'
+    }
+  }, retrying ? "\u0E01\u0E33\u0E25\u0E31\u0E07\u0E2A\u0E48\u0E07..." : "\u0E25\u0E2D\u0E07\u0E2A\u0E48\u0E07\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07"))), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
       // ถ้ามาจาก Performance ให้กลับไป Performance โดย pre-select region+asCode เดิม
       if (onNavigate && preSelect) {
@@ -6543,20 +6576,26 @@ function App() {
       return o;
     });
   }, [liveSales]);
+  const syncFeedback = useCallback(async fb => {
+    try {
+      const res = await fetch(SHEETS_URL, {
+        method: 'POST',
+        body: JSON.stringify(fb)
+      });
+      const j = await res.json();
+      // duplicate = backend เคยรับแล้ว ถือว่าสำเร็จ
+      return j && j.status === 'ok';
+    } catch (e) {
+      console.warn('Sheets sync failed:', e);
+      return false;
+    }
+  }, []);
   const handleSubmit = useCallback(async fb => {
     const updated = [...feedbacks, fb];
     setFeedbacks(updated);
     storage.set('wss_feedbacks_v2', JSON.stringify(updated));
-    try {
-      const encoded = encodeURIComponent(JSON.stringify(fb));
-      await fetch(`${SHEETS_URL}?data=${encoded}`, {
-        method: 'GET',
-        mode: 'no-cors'
-      });
-    } catch (e) {
-      console.warn('Sheets sync failed:', e);
-    }
-  }, [feedbacks]);
+    return await syncFeedback(fb);
+  }, [feedbacks, syncFeedback]);
   function handleNav(id, preSelect = null) {
     setSurveyPreSelect(preSelect);
     setPage(id);
@@ -6708,6 +6747,7 @@ function App() {
   }, "\u26A0\uFE0F \u0E22\u0E31\u0E07\u0E21\u0E35 ", /*#__PURE__*/React.createElement("strong", null, pending, " \u0E2A\u0E32\u0E02\u0E32"), " \u0E17\u0E35\u0E48\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E2A\u0E48\u0E07 Feedback \u0E2A\u0E31\u0E1B\u0E14\u0E32\u0E2B\u0E4C\u0E19\u0E35\u0E49"), page === 'survey' && /*#__PURE__*/React.createElement(SurveyPage, {
     feedbacks: feedbacks,
     onSubmit: handleSubmit,
+    onRetrySync: syncFeedback,
     sheetsUrl: sheetsUrl,
     activeSites: activeSites,
     preSelect: surveyPreSelect,
