@@ -6,7 +6,15 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
 <meta http-equiv="Pragma" content="no-cache"/>
 <meta http-equiv="Expires" content="0"/>
-<title>Weekly Sales Survey</title>
+<title>SO &amp; Feedback</title>
+<meta name="theme-color" content="#0f172a"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="icon" href="favicon-64.png"/>
+<link rel="apple-touch-icon" href="apple-touch-icon.png"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="apple-mobile-web-app-title" content="SO &amp; Feedback"/>
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -6557,8 +6565,16 @@ function App() {
       action: 'getFeedbacks'
     }))}`).then(r => r.json()).catch(() => null), fetch(`${SHEETS_URL}?action=getSales`).then(r => r.json()).catch(() => null)]).then(([fbData, salesData]) => {
       if (fbData?.status === 'ok' && fbData.feedbacks?.length > 0) {
-        setFeedbacks(fbData.feedbacks);
-        storage.set('wss_feedbacks_v2', JSON.stringify(fbData.feedbacks));
+        // merge: เก็บรายการ local ที่มี id แต่ยังไม่ถึงเซิร์ฟเวอร์ (ยังไม่ sync) ไว้ด้วย ไม่ให้หายตอน reload
+        const serverIds = new Set(fbData.feedbacks.map(f => String(f.id || '')).filter(Boolean));
+        let localOnly = [];
+        try {
+          const fd2 = storage.get('wss_feedbacks_v2');
+          if (fd2) localOnly = JSON.parse(fd2.value).filter(f => f.id && !serverIds.has(String(f.id)));
+        } catch (e) {}
+        const merged = [...fbData.feedbacks, ...localOnly];
+        setFeedbacks(merged);
+        storage.set('wss_feedbacks_v2', JSON.stringify(merged));
       }
       if (salesData?.status === 'ok' && salesData.sites?.length > 0) {
         setLiveSales(salesData.sites);
@@ -6669,7 +6685,7 @@ function App() {
       fontWeight: 800,
       fontSize: 16
     }
-  }, "\uD83D\uDCCA Weekly Sales Survey"), /*#__PURE__*/React.createElement("div", {
+  }, "\uD83D\uDCCA SO & Feedback"), /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 10,
       color: '#475569',
@@ -6766,6 +6782,15 @@ function App() {
   })));
 }
 ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(App, null));
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('service-worker.js').catch(function (e) {
+      console.warn('SW register failed:', e);
+    });
+  });
+}
 </script>
 </body>
 </html>
