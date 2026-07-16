@@ -3744,7 +3744,7 @@ function CatFilterChips({
     }), c + ' \xB7 ' + CAT_LABELS[c]);
   })));
 }
-const SITUATIONS = ['มีปัญหา พื้นที่จัดวางสินค้า / ตำแหน่งดิสเพลย์ ไม่ดี', 'ตัวโชว์น้อย / Model / Segment ไม่เหมาะกับสาขา', 'โปรโมชั่น / ราคาสินค้า สู้คู่แข่งไม่ได้', 'PC มีปัญหา / New PC / พนักงานทักษะการขายต่ำ', 'Stock สินค้าขาด / สินค้ามีไม่ต่อเนื่อง', 'ปัญหาอื่นๆ โปรดระบุรายละเอียด'];
+const SITUATIONS = ['สถานการณ์ปกติ ทำยอดขายได้ตามเป้าหมาย', 'มีปัญหา พื้นที่จัดวางสินค้า / ตำแหน่งดิสเพลย์ ไม่ดี', 'ตัวโชว์น้อย / Model / Segment ไม่เหมาะกับสาขา', 'โปรโมชั่น / ราคาสินค้า สู้คู่แข่งไม่ได้', 'PC มีปัญหา / New PC / พนักงานทักษะการขายต่ำ', 'Stock สินค้าขาด / สินค้ามีไม่ต่อเนื่อง', 'ปัญหาอื่นๆ โปรดระบุรายละเอียด'];
 const ISSUES = SITUATIONS;
 
 // shared styles
@@ -6551,9 +6551,16 @@ function App() {
   const [loading, setLoading] = useState(() => !(storage.get('wss_feedbacks_v2') && storage.get('wss_live_sales')));
   const [surveyPreSelect, setSurveyPreSelect] = useState(null);
   const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbwSF2Y_2E46FKZYcS7mu7ucfwNXQpRR-kpRjCjWsbjCzFan3c--nJ0HHifsfcR8_yaq/exec';
+  const SCRIPT_VERSION_EXPECTED = 2;
+  const [verWarn, setVerWarn] = useState(false);
 
   // โหลด feedbacks + sales จาก Sheets ทุกครั้งที่เปิดเว็บ (localStorage เป็น fallback)
   useEffect(() => {
+    // 0) เช็คเวอร์ชัน backend — เตือนถ้า deploy ไม่ตรงกับเว็บ (เงียบถ้า offline)
+    fetch(`${SHEETS_URL}?action=ping`).then(r => r.json()).then(j => {
+      if (!j || j.status !== 'ok' || j.version !== SCRIPT_VERSION_EXPECTED) setVerWarn(true);
+    }).catch(() => {});
+
     // 1) แสดงข้อมูล cache เดิมทันที (ถ้ามี) ไม่ต้องรอ fetch
     const fdCache = storage.get('wss_feedbacks_v2');
     if (fdCache) setFeedbacks(JSON.parse(fdCache.value));
@@ -6665,7 +6672,17 @@ function App() {
       minHeight: '100vh',
       background: '#f1f5f9'
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, verWarn && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: '#FEF3C7',
+      color: '#92400E',
+      padding: '8px 16px',
+      textAlign: 'center',
+      fontSize: 13,
+      fontWeight: 700,
+      borderBottom: '1px solid #FDE68A'
+    }
+  }, "\u26A0\uFE0F \u0E23\u0E30\u0E1A\u0E1A\u0E2B\u0E25\u0E31\u0E07\u0E1A\u0E49\u0E32\u0E19 (Apps Script) \u0E40\u0E27\u0E2D\u0E23\u0E4C\u0E0A\u0E31\u0E19\u0E44\u0E21\u0E48\u0E15\u0E23\u0E07\u0E01\u0E31\u0E1A\u0E40\u0E27\u0E47\u0E1A \u2014 \u0E01\u0E23\u0E38\u0E13\u0E32 deploy Apps Script \u0E40\u0E27\u0E2D\u0E23\u0E4C\u0E0A\u0E31\u0E19\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14"), /*#__PURE__*/React.createElement("div", {
     style: {
       background: '#0f172a',
       color: '#fff',
